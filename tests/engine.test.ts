@@ -262,6 +262,7 @@ describe('猎人', () => {
     const g = new Game();
     toFirstExileVote(g);
     g.voteAll({}, 7);
+    g.confirmExile();
     expect(g.state.phase).toBe('hunter');
     g.act(7, { type: 'hunter_shoot', targetId: null });
     expect(g.state.phase).toBe('night');
@@ -283,24 +284,37 @@ describe('猎人', () => {
 });
 
 describe('白痴', () => {
-  it('默认规则：被放逐翻牌公布身份，翻牌后出局', () => {
+  it('默认规则：被放逐时自动翻牌公布身份，遗言后出局', () => {
     const g = new Game();
     toFirstExileVote(g);
     g.voteAll({}, 8);
-    expect(g.state.phase).toBe('idiot');
-    expectErr(() => g.act(9, { type: 'idiot_flip', flip: true }));
-    g.act(8, { type: 'idiot_flip', flip: true });
+    expect(g.state.phase).toBe('exile_confirm');
     expect(g.p(8).revealed).toBe(true);
-    expect(g.p(8).alive).toBe(false);
     expect(buildView(g.state, g.id(9), g.now).players.find((p) => p.seat === 8)!.role).toBe('idiot');
+    expect(g.state.log.some((l) => l.public && l.text.includes('自动翻牌'))).toBe(true);
+    expectErr(() => g.act(9, { type: 'exile_confirm' }));
+    g.act(8, { type: 'exile_confirm' });
+    expect(g.p(8).alive).toBe(false);
     expect(g.state.phase).toBe('night');
   });
 
-  it('经典规则选项：翻牌免于出局但失去投票权，且不能再被放逐', () => {
+  it('非白痴被放逐：不翻牌，身份不公开，遗言确认后出局', () => {
+    const g = new Game();
+    toFirstExileVote(g);
+    g.voteAll({}, 10);
+    expect(g.state.phase).toBe('exile_confirm');
+    expect(g.p(10).revealed).toBe(false);
+    expect(buildView(g.state, g.id(9), g.now).players.find((p) => p.seat === 10)!.role).toBeNull();
+    g.act(10, { type: 'exile_confirm' });
+    expect(g.p(10).alive).toBe(false);
+  });
+
+  it('经典规则选项：自动翻牌后免于出局但失去投票权，且不能再被放逐', () => {
     const g = new Game({ idiotFlipSurvives: true });
     toFirstExileVote(g);
     g.voteAll({}, 8);
-    g.act(8, { type: 'idiot_flip', flip: true });
+    expect(g.state.phase).toBe('night');
+    expect(g.p(8).revealed).toBe(true);
     expect(g.p(8).alive).toBe(true);
     expect(g.p(8).canVote).toBe(false);
     g.night(9, 2);
@@ -358,6 +372,7 @@ describe('警长竞选与投票权重', () => {
     g.voteAll({ 9: 1, 10: 1, 11: 1, 12: 1, 5: 1, 1: 2, 2: 2, 3: 2, 4: 2, 6: 2, 7: 2, 8: null });
     const r = g.state.voteResults.at(-1)!;
     expect(r.tally).toEqual([{ targetId: 'p1', votes: 5.5 }, { targetId: 'p2', votes: 6 }]);
+    g.confirmExile();
     expect(g.p(2).alive).toBe(false);
   });
 
@@ -380,6 +395,7 @@ describe('警长竞选与投票权重', () => {
     g.finishSpeeches();
     g.act(9, { type: 'sheriff_suggest', targetId: null });
     g.voteAll({}, 9);
+    g.confirmExile();
     expect(g.state.phase).toBe('badge');
     expectErr(() => g.act(9, { type: 'badge', targetId: g.id(9) }));
     g.act(9, { type: 'badge', targetId: null });
@@ -477,6 +493,7 @@ describe('屠边胜负判定', () => {
     [9, 10, 11].forEach((s) => (g.p(s).alive = false));
     toFirstExileVoteNoSave(g);
     g.voteAll({}, 12);
+    g.confirmExile();
     expect(g.state.winner).toBe('wolf');
     expect(g.state.winReason).toContain('屠民');
   });
@@ -577,7 +594,7 @@ function playRandom(g: Game, rng: () => number) {
         g.act(seatOf(e.playerId), { type: 'badge', targetId: rng() < 0.7 ? pick(targets, rng) : null });
         break;
       }
-      case 'idiot': g.act(seatOf(s.idiotPendingId!), { type: 'idiot_flip', flip: rng() < 0.8 }); break;
+      case 'exile_confirm': g.act(seatOf(s.exiledPendingId!), { type: 'exile_confirm' }); break;
       case 'sheriff_signup': {
         const p = alive.find((x) => !(x.id in s.election!.signup))!;
         g.act(p.seat, { type: 'sheriff_signup', join: rng() < 0.3 });

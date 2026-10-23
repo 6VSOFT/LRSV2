@@ -3,9 +3,10 @@ import QRCode from 'qrcode';
 import type { Action } from '../shared/engine';
 import type { PlayerView } from '../shared/types';
 import { ConfirmButton, RoleCard, RoleImage, SeatGrid } from './components';
+import { useTurnAlert, useWakeLock } from './turn';
 import { api, ApiError, clearSession, loadSession, PHASE_TITLE, rememberNickname, saveSession, Session } from './lib';
 import {
-  BadgePanel, DawnPanel, EndPanel, HunterPanel, IdiotPanel, label, NightPanel, SheriffSignupPanel,
+  BadgePanel, DawnPanel, EndPanel, ExilePanel, HunterPanel, NightPanel, PrivateNotes, SheriffSignupPanel,
   SpeechOrderPanel, SpeechPanel, SuggestPanel, VotePanel, VoteResultCard,
 } from './phases';
 
@@ -196,6 +197,8 @@ function useRoom(code: string) {
 
 function RoomPage({ code }: { code: string }) {
   const { session, setSession, view, error, setError, offline, offset, act } = useRoom(code);
+  const myTurn = useTurnAlert(view);
+  useWakeLock(view?.status === 'playing');
 
   if (error === '房间不存在') {
     return (
@@ -220,6 +223,7 @@ function RoomPage({ code }: { code: string }) {
         <div className="me-chip">{me ? `${me.seat}号` : ''}{me && !me.alive ? '·出局' : ''}</div>
       </header>
       {offline && <div className="banner warn">网络连接中断，正在重连…</div>}
+      {myTurn && <div className="banner turn">👉 轮到你操作了</div>}
       {error && <div className="banner error" onClick={() => setError('')}>{error}（点击关闭）</div>}
 
       {view.status === 'lobby' ? (
@@ -227,9 +231,7 @@ function RoomPage({ code }: { code: string }) {
       ) : (
         <>
           {view.me?.role && view.status === 'playing' && <RoleCard role={view.me.role} />}
-          {view.me?.role === 'werewolf' && view.status === 'playing' && (
-            <div className="card slim small">🐺 狼队友：{view.me.teammates.map((id) => label(view, id)).join('、')}</div>
-          )}
+          {view.status === 'playing' && <PrivateNotes view={view} />}
           <PhasePanel view={view} act={act} offset={offset} />
           {view.status === 'playing' && view.phase !== 'night' && !['sheriff_vote', 'exile_vote'].includes(view.phase) && view.voteResults.length > 0
             && view.voteResults.at(-1)!.day === view.day && (
@@ -240,7 +242,18 @@ function RoomPage({ code }: { code: string }) {
           )}
           <GameLog view={view} />
           {view.status === 'ended' && (
-            <div className="actions"><button className="btn primary" onClick={() => go('/')}>返回首页，开新房间</button></div>
+            <div className="actions">
+              {me?.isCreator ? (
+                <ConfirmButton
+                  label="再来一局（同一房间）"
+                  confirmText="确认开始新一局？所有玩家回到等待室并重新准备，本局结果将被清空。"
+                  onConfirm={() => act({ type: 'restart' })}
+                />
+              ) : (
+                <p className="small muted center">房主可以在同一房间开始新一局，你无需重新加入。</p>
+              )}
+              <button className="btn ghost" onClick={() => go('/')}>返回首页</button>
+            </div>
           )}
         </>
       )}
@@ -254,7 +267,7 @@ function PhasePanel(props: { view: PlayerView; act: (a: Action) => Promise<unkno
     case 'dawn': return <DawnPanel {...props} />;
     case 'hunter': return <HunterPanel {...props} />;
     case 'badge': return <BadgePanel {...props} />;
-    case 'idiot': return <IdiotPanel {...props} />;
+    case 'exile_confirm': return <ExilePanel {...props} />;
     case 'sheriff_signup': return <SheriffSignupPanel {...props} />;
     case 'sheriff_speech':
     case 'day_speech':
@@ -354,7 +367,7 @@ function Lobby({ view, act, code }: { view: PlayerView; act: (a: Action) => Prom
           <li>猎人被狼刀或被放逐可开枪，被毒杀不能开枪。</li>
           <li>首日竞选警长；警长归票时 1.5 票。</li>
           <li>
-            白痴被放逐翻牌：{view.settings.idiotFlipSurvives ? '翻牌免死，但失去投票权（经典规则）' : '翻牌公布身份后仍然出局（本项目默认）'}
+            白痴被放逐时自动翻牌：{view.settings.idiotFlipSurvives ? '翻牌免死，但失去投票权（经典规则）' : '公布身份后仍然出局（本项目默认）'}
             {isCreator && (
               <button className="chip" onClick={() => act({ type: 'settings', settings: { idiotFlipSurvives: !view.settings.idiotFlipSurvives } }).catch(() => undefined)}>切换</button>
             )}

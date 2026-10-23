@@ -50,7 +50,8 @@ function decide(v, me) {
     case 'dawn': return { type: 'continue' };
     case 'hunter': return me.hunterCanShoot ? { type: 'hunter_shoot', targetId: pick(others) } : null;
     case 'badge': return v.currentEffect?.playerId === me.playerId ? { type: 'badge', targetId: pick(others) } : null;
-    case 'idiot': return v.idiotPendingId === me.playerId ? { type: 'idiot_flip', flip: true } : null;
+    case 'exile_confirm': return v.exiledPendingId === me.playerId ? { type: 'exile_confirm' } : null;
+    case 'ended': return null;
     case 'sheriff_signup': return self.alive && v.election.mySignup === undefined ? { type: 'sheriff_signup', join: Math.random() < 0.3 } : null;
     case 'sheriff_speech': case 'day_speech': case 'exile_pk_speech':
       return v.speech.order[v.speech.index] === me.playerId ? { type: 'speech_done' } : null;

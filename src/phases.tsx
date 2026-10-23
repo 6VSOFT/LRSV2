@@ -140,6 +140,27 @@ export function NightPanel({ view, act }: PanelProps) {
   );
 }
 
+/** 只有自己能看到的私人信息（夜间行动界面已展示的内容不再重复） */
+export function PrivateNotes({ view }: { view: PlayerView }) {
+  const me = view.me;
+  if (!me?.role) return null;
+  const nightActing = view.phase === 'night' && (me.wolfCanAct || me.seerCanAct || !!me.witch?.canAct || !!me.wolfVotes);
+  if (nightActing) return null;
+  if (me.role === 'werewolf') {
+    return <div className="card slim small">🐺 狼队友：{me.teammates.map((id) => label(view, id)).join('、')}</div>;
+  }
+  if (me.role === 'seer' && me.seerChecks.length > 0 && view.phase !== 'night') {
+    return <div className="card slim"><SeerHistory view={view} /></div>;
+  }
+  if (me.role === 'witch' && me.witch && view.phase !== 'night' && meAlive(view)) {
+    return <div className="card slim small">🧪 解药 {me.witch.antidote ? '×1' : '已用'} · 毒药 {me.witch.poison ? '×1' : '已用'}</div>;
+  }
+  if (me.role === 'hunter' && me.hunterDeathCause === 'poison') {
+    return <div className="card slim small">🔫 你被女巫毒杀，按规则不能开枪。</div>;
+  }
+  return null;
+}
+
 function SeerHistory({ view }: { view: PlayerView }) {
   const checks = view.me?.seerChecks ?? [];
   if (checks.length === 0) return null;
@@ -269,24 +290,26 @@ export function BadgePanel({ view, act }: PanelProps) {
   );
 }
 
-export function IdiotPanel({ view, act }: PanelProps) {
-  if (view.idiotPendingId !== view.me?.playerId) {
+/** 被放逐者发表遗言后确认出局（白痴已由系统自动翻牌） */
+export function ExilePanel({ view, act }: PanelProps) {
+  if (view.exiledPendingId !== view.me?.playerId) {
     return (
       <section className="card center">
-        <h2>放逐结算中</h2>
-        <p>{label(view, view.idiotPendingId)} 被放逐，等待其确认…</p>
+        <h2>📜 放逐遗言</h2>
+        <p>{label(view, view.exiledPendingId)} 被放逐，正在发表遗言…</p>
+        <p className="small muted">遗言结束后由被放逐玩家在自己手机上确认。</p>
       </section>
     );
   }
+  const isIdiot = view.me?.role === 'idiot';
   return (
     <section className="card center">
-      <RoleImage role="idiot" size={110} />
+      {isIdiot && <RoleImage role="idiot" size={110} />}
       <h2>你被放逐了</h2>
-      <p className="small">你是白痴，可以选择翻牌公布身份。
-        {view.settings.idiotFlipSurvives ? '翻牌后免于出局，但失去投票权。' : '按本局规则，翻牌后仍然出局。'}</p>
+      {isIdiot && <p className="small">系统已自动翻牌，公布你的白痴身份。</p>}
+      <p className="small">请线下发表遗言，结束后点击确认出局。</p>
       <div className="actions">
-        <ConfirmButton label="翻牌（公布白痴身份）" confirmText="确认翻牌公布你的白痴身份？" onConfirm={() => act({ type: 'idiot_flip', flip: true })} />
-        <ConfirmButton tone="ghost" label="不翻牌，直接出局" confirmText="确认不翻牌并出局？" onConfirm={() => act({ type: 'idiot_flip', flip: false })} />
+        <ConfirmButton label="遗言结束，确认出局" confirmText="确认出局？" onConfirm={() => act({ type: 'exile_confirm' })} />
       </div>
     </section>
   );
@@ -331,7 +354,7 @@ export function SpeechPanel({ view, act, offset }: PanelProps) {
   return (
     <section className="card">
       <h2>🗣️ {title}</h2>
-      {view.speechDirection && <p className="small muted">警长选择{view.speechDirection === 'cw' ? '顺时针' : '逆时针'}发言</p>}
+      {view.speechDirection && sp.purpose === 'day' && <p className="small muted">警长选择{view.speechDirection === 'cw' ? '顺时针' : '逆时针'}发言</p>}
       <div className={`speaker ${isMe ? 'mine' : ''}`}>
         <div>
           <div className="small muted">当前发言</div>

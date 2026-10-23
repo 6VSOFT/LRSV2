@@ -56,7 +56,7 @@ export function buildView(state: GameState, viewerId: string | null, now: number
     } : null,
     voteResults: state.voteResults,
     currentEffect: state.phase === 'hunter' || state.phase === 'badge' ? state.effects[0] ?? null : null,
-    idiotPendingId: state.idiotPendingId,
+    exiledPendingId: state.exiledPendingId,
     winner: state.winner,
     winReason: state.winReason,
     log: ended ? state.log : state.log.filter((l) => l.public),

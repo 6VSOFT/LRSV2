@@ -201,6 +201,8 @@ input:focus { border-color: var(--primary); }
 
 .banner { border-radius: 12px; padding: 10px 14px; font-size: 14px; }
 .banner.warn { background: #4a3a10; color: var(--gold); }
+.banner.turn { background: linear-gradient(90deg, #5a4bea, #7c6cff); color: #fff; font-weight: 700; text-align: center; animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.75; } }
 .banner.error, .error { background: #3d1820; color: #ffb3bb; border-radius: 12px; padding: 10px 14px; font-size: 14px; cursor: pointer; }
 
 .modal-back { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); display: flex; align-items: flex-end; justify-content: center; z-index: 50; padding: 16px; }

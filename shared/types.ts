@@ -30,7 +30,7 @@ export type Phase =
   | 'dawn'
   | 'hunter'
   | 'badge'
-  | 'idiot'
+  | 'exile_confirm'
   | 'sheriff_signup'
   | 'sheriff_speech'
   | 'sheriff_vote'
@@ -165,8 +165,8 @@ export interface GameState {
   speechDirection: 'cw' | 'ccw' | null;
   vote: VoteState | null;
   voteResults: VoteResult[];
-  /** 当前正被处理的白痴翻牌（被放逐者） */
-  idiotPendingId: string | null;
+  /** 被放逐、正在确认出局（白痴可在此翻牌）的玩家 */
+  exiledPendingId: string | null;
   effects: Effect[];
   continuation: Continuation | null;
   winner: Team | null;
@@ -242,7 +242,7 @@ export interface PlayerView {
   vote: { kind: VoteState['kind']; round: 1 | 2; voters: string[]; targets: string[]; voted: string[] } | null;
   voteResults: VoteResult[];
   currentEffect: Effect | null;
-  idiotPendingId: string | null;
+  exiledPendingId: string | null;
   winner: Team | null;
   winReason: string | null;
   log: LogEntry[];

@@ -79,7 +79,7 @@ export const ROLE_INFO: Record<Role, { name: string; team: string; desc: string;
   seer: { name: '预言家', team: '好人阵营 · 神职', color: '#8e7cff', desc: '每晚查验一名玩家，得知其是好人还是狼人。' },
   witch: { name: '女巫', team: '好人阵营 · 神职', color: '#3dd68c', desc: '一瓶解药、一瓶毒药，每晚最多用一瓶，不能自救。用过解药后不再得知刀口。' },
   hunter: { name: '猎人', team: '好人阵营 · 神职', color: '#f5a524', desc: '被狼人击杀或被放逐时可开枪带走一名玩家；被毒杀不能开枪。' },
-  idiot: { name: '白痴', team: '好人阵营 · 神职', color: '#2ec8d6', desc: '白天被放逐时可以翻牌公布身份。' },
+  idiot: { name: '白痴', team: '好人阵营 · 神职', color: '#2ec8d6', desc: '白天被放逐时系统自动翻牌，公布白痴身份。' },
   villager: { name: '村民', team: '好人阵营 · 平民', color: '#c9a36b', desc: '没有特殊技能，依靠发言与投票找出狼人。' },
 };
 
@@ -89,7 +89,7 @@ export const PHASE_TITLE: Record<PlayerView['phase'], string> = {
   dawn: '天亮了',
   hunter: '猎人技能',
   badge: '警徽移交',
-  idiot: '白痴翻牌',
+  exile_confirm: '放逐遗言',
   sheriff_signup: '警长竞选 · 报名',
   sheriff_speech: '警长竞选 · 发言',
   sheriff_vote: '警长竞选 · 投票',

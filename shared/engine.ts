@@ -25,7 +25,8 @@ export type Action =
   | { type: 'continue' }
   | { type: 'hunter_shoot'; targetId: string | null }
   | { type: 'badge'; targetId: string | null }
-  | { type: 'idiot_flip'; flip: boolean }
+  | { type: 'exile_confirm' }
+  | { type: 'restart' }
   | { type: 'sheriff_signup'; join: boolean }
   | { type: 'sheriff_withdraw' }
   | { type: 'speech_done' }
@@ -110,7 +111,7 @@ export function createGame(code: string, creator: { id: string; nickname: string
     sheriffId: null, electionDone: false, sheriffSuggestion: null,
     witchPotions: { antidote: true, poison: true }, night: null, seerChecks: [], dawnDeaths: [],
     election: null, speech: null, speechDirection: null, vote: null, voteResults: [],
-    idiotPendingId: null, effects: [], continuation: null, winner: null, winReason: null, log: [],
+    exiledPendingId: null, effects: [], continuation: null, winner: null, winReason: null, log: [],
   };
 }
 
@@ -149,6 +150,7 @@ export function touch(state: GameState, playerId: string, now: number): boolean 
 export function applyAction(state: GameState, actorId: string, action: Action, now: number, rng: Rng): void {
   const actor = mustPlayer(state, actorId);
   actor.lastSeen = now;
+  if (action.type === 'restart') return restartGame(state, actor, now);
   if (state.status === 'ended') fail('游戏已结束');
 
   if (state.status === 'lobby') {
@@ -166,7 +168,7 @@ export function applyAction(state: GameState, actorId: string, action: Action, n
     case 'continue': return dawnContinue(state, now, rng);
     case 'hunter_shoot': return hunterShoot(state, actor, action.targetId, now, rng);
     case 'badge': return badgeAct(state, actor, action.targetId, now, rng);
-    case 'idiot_flip': return idiotFlip(state, actor, action.flip, now, rng);
+    case 'exile_confirm': return exileConfirm(state, actor, now, rng);
     case 'sheriff_signup': return sheriffSignup(state, actor, action.join, now, rng);
     case 'sheriff_withdraw': return sheriffWithdraw(state, actor, now, rng);
     case 'speech_done': return speechDone(state, actor, false, now, rng);
@@ -226,6 +228,22 @@ function lobbyAction(state: GameState, actor: Player, action: Action, now: numbe
     default:
       fail('游戏尚未开始');
   }
+}
+
+/** 游戏结束后由房主把同一房间重置为等待室，保留玩家与座位，清空身份与记录 */
+function restartGame(state: GameState, actor: Player, now: number) {
+  if (state.status !== 'ended') fail('游戏尚未结束');
+  if (actor.id !== state.creatorId) fail('只有房间创建者可以开始新一局');
+  for (const p of state.players) {
+    Object.assign(p, { ready: false, role: null, alive: true, deathCause: null, deathDay: null, revealed: false, canVote: true });
+  }
+  Object.assign(state, {
+    status: 'lobby', day: 0, sheriffId: null, electionDone: false, sheriffSuggestion: null,
+    witchPotions: { antidote: true, poison: true }, night: null, seerChecks: [], dawnDeaths: [],
+    election: null, speech: null, speechDirection: null, vote: null, voteResults: [],
+    exiledPendingId: null, effects: [], continuation: null, winner: null, winReason: null, log: [],
+  } satisfies Partial<GameState>);
+  setPhase(state, 'lobby', now);
 }
 
 export function startGame(state: GameState, actor: Player, now: number, rng: Rng) {
@@ -502,7 +520,7 @@ function checkWin(state: GameState, now: number): boolean {
   state.election = null;
   state.effects = [];
   state.continuation = null;
-  state.idiotPendingId = null;
+  state.exiledPendingId = null;
   setPhase(state, 'ended', now);
   log(state, now, `游戏结束：${r.reason}`, true);
   return true;
@@ -781,32 +799,29 @@ function exilePlayer(state: GameState, id: string, now: number, rng: Rng) {
   const p = mustPlayer(state, id);
   state.vote = null;
   log(state, now, `${seatLabel(state, id)} 被投票放逐`, true);
+  // 白痴被放逐时系统自动翻牌公布身份
   if (p.role === 'idiot' && !p.revealed) {
-    state.idiotPendingId = id;
-    setPhase(state, 'idiot', now);
-    return;
-  }
-  finishExile(state, id, now, rng);
-}
-
-function idiotFlip(state: GameState, actor: Player, flip: boolean, now: number, rng: Rng) {
-  if (state.phase !== 'idiot' || state.idiotPendingId !== actor.id) fail('当前不能翻牌');
-  state.idiotPendingId = null;
-  if (flip) {
-    actor.revealed = true;
-    log(state, now, `${seatLabel(state, actor.id)} 翻牌：白痴`, true);
+    p.revealed = true;
+    log(state, now, `${seatLabel(state, id)} 自动翻牌：白痴`, true);
     if (state.settings.idiotFlipSurvives) {
-      actor.canVote = false;
+      p.canVote = false;
       log(state, now, '白痴翻牌免于出局，但失去投票权', true);
-      if (state.sheriffId === actor.id) {
+      if (state.sheriffId === p.id) {
         state.sheriffId = null;
         log(state, now, '白痴翻牌后警徽流失，本局不再有警长', true);
       }
       return finishExile(state, null, now, rng);
     }
-  } else {
-    log(state, now, `${seatLabel(state, actor.id)} 选择不翻牌`, true);
   }
+  // 被放逐者发表遗言后自行确认出局
+  state.exiledPendingId = p.id;
+  setPhase(state, 'exile_confirm', now);
+}
+
+function exileConfirm(state: GameState, actor: Player, now: number, rng: Rng) {
+  if (state.phase !== 'exile_confirm' || state.exiledPendingId !== actor.id) fail('当前不能操作');
+  state.exiledPendingId = null;
+  log(state, now, `${seatLabel(state, actor.id)} 发表遗言后出局`, true);
   finishExile(state, actor.id, now, rng);
 }
 

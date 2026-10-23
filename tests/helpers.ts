@@ -84,6 +84,12 @@ export class Game {
     }
   }
 
+  /** 被放逐者遗言后确认出局 */
+  confirmExile() {
+    const id = this.state.exiledPendingId!;
+    this.act(this.state.players.find((p) => p.id === id)!.seat, { type: 'exile_confirm' });
+  }
+
   /** 首日：所有人不上警 */
   skipElection() {
     for (const p of this.state.players.filter((x) => x.alive)) this.act(p.seat, { type: 'sheriff_signup', join: false });

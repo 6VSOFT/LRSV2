@@ -130,6 +130,11 @@ describe('API：并发与重复提交', () => {
     st = await raw(store, ps[0].code);
     expect(st.voteResults.length).toBe(1);
     expect(st.voteResults[0].tally).toEqual([{ targetId: target, votes: 12 }]);
+    expect(st.phase).toBe('exile_confirm');
+    // 被放逐者重复点击确认，只结算一次
+    const confirms = await Promise.all([1, 2, 3].map(() => act(store, byId(target), { type: 'exile_confirm' })));
+    expect(confirms.filter((r) => r.status === 200).length).toBe(1);
+    st = await raw(store, ps[0].code);
     expect(st.players.find((p) => p.id === target)!.alive).toBe(false);
     expect(st.phase).toBe('night');
     expect(st.day).toBe(2);
