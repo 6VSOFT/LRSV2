@@ -1,7 +1,7 @@
 // 自动法官核心规则引擎（纯函数式变更 GameState，服务端唯一可信结算）
 import {
-  Continuation, DeathCause, Effect, GameState, GOD_ROLES, MAX_PLAYERS, NightState, Player,
-  ROLE_NAMES, STANDARD_12, Settings, SpeechPurpose, Team, VoteResult, VoteState,
+  Board, BoardId, BOARDS, Continuation, DEFAULT_BOARD, DeathCause, Effect, GameState, GOD_ROLES, NightState, Player,
+  ROLE_NAMES, Settings, SpeechPurpose, Team, VoteResult, VoteState,
 } from './types';
 
 export class GameError extends Error {}
@@ -110,9 +110,21 @@ export function newPlayer(id: string, nickname: string, tokenHash: string, seat:
   };
 }
 
-export function createGame(code: string, creator: { id: string; nickname: string; tokenHash: string }, now: number): GameState {
+export function getBoard(state: Pick<GameState, 'board'>): Board {
+  return BOARDS[state.board ?? DEFAULT_BOARD];
+}
+
+export function parseBoardId(raw: unknown): BoardId {
+  if (raw == null || raw === '') return DEFAULT_BOARD;
+  if (typeof raw === 'string' && raw in BOARDS) return raw as BoardId;
+  fail('未知的板子');
+}
+
+export function createGame(
+  code: string, creator: { id: string; nickname: string; tokenHash: string }, now: number, board: BoardId = DEFAULT_BOARD,
+): GameState {
   return {
-    code, createdAt: now, creatorId: creator.id, settings: { ...DEFAULT_SETTINGS },
+    code, board, createdAt: now, creatorId: creator.id, settings: { ...DEFAULT_SETTINGS },
     status: 'lobby', phase: 'lobby', phaseStartedAt: now, day: 0,
     players: [newPlayer(creator.id, validateNickname(creator.nickname), creator.tokenHash, 1, now)],
     sheriffId: null, electionDone: false, sheriffSuggestion: null,
@@ -131,7 +143,8 @@ export function validateNickname(raw: string): string {
 
 export function addPlayer(state: GameState, p: { id: string; nickname: string; tokenHash: string }, now: number): Player {
   if (state.status !== 'lobby') fail('游戏已开始，无法加入');
-  if (state.players.length >= MAX_PLAYERS) fail('房间已满（12 人）');
+  const size = getBoard(state).size;
+  if (state.players.length >= size) fail(`房间已满（${size} 人）`);
   const nickname = validateNickname(p.nickname);
   if (state.players.some((x) => x.nickname === nickname)) fail('昵称已被使用');
   if (state.players.some((x) => x.id === p.id)) fail('你已在房间中');
@@ -208,7 +221,7 @@ function lobbyAction(state: GameState, actor: Player, action: Action, now: numbe
       return;
     case 'seat': {
       const seat = Math.floor(Number(action.seat));
-      if (!(seat >= 1 && seat <= MAX_PLAYERS)) fail('座位号无效');
+      if (!(seat >= 1 && seat <= getBoard(state).size)) fail('座位号无效');
       if (state.players.some((p) => p.seat === seat && p.id !== actor.id)) fail('该座位已有人');
       actor.seat = seat;
       actor.ready = false;
@@ -255,16 +268,17 @@ function restartGame(state: GameState, actor: Player, now: number) {
 
 export function startGame(state: GameState, actor: Player, now: number, rng: Rng) {
   if (actor.id !== state.creatorId) fail('只有房间创建者可以开始游戏');
-  if (state.players.length !== MAX_PLAYERS) fail(`需要 ${MAX_PLAYERS} 名玩家，目前 ${state.players.length} 名`);
+  const board = getBoard(state);
+  if (state.players.length !== board.size) fail(`需要 ${board.size} 名玩家，目前 ${state.players.length} 名`);
   if (state.players.some((p) => !p.ready)) fail('还有玩家未准备');
-  const roles = shuffle(STANDARD_12, rng);
+  const roles = shuffle(board.roles, rng);
   state.players.forEach((p, i) => {
     p.role = roles[i];
     p.alive = true;
   });
   state.status = 'playing';
   state.day = 1;
-  log(state, now, '游戏开始：预女猎白 12 人局（4 狼 4 神 4 民），身份已发放', true);
+  log(state, now, `游戏开始：${board.name}（${board.summary}），身份已发放`, true);
   for (const p of state.players) log(state, now, `${seatLabel(state, p.id)} 的身份是 ${ROLE_NAMES[p.role!]}`, false);
   beginNight(state, now, rng);
 }
@@ -318,6 +332,11 @@ function seerCheck(state: GameState, actor: Player, targetId: string, now: numbe
   advanceNight(state, now, rng);
 }
 
+/** 本晚女巫能否自救（9 人局：仅首晚可以） */
+export function witchMaySelfSave(state: GameState): boolean {
+  return getBoard(state).witchSelfSaveFirstNight && state.day === 1;
+}
+
 /** 女巫当晚是否可获知刀口：解药未使用时才可获知 */
 export function witchKnowsKill(state: GameState): boolean {
   return state.witchPotions.antidote;
@@ -330,7 +349,9 @@ function witchAct(state: GameState, actor: Player, type: 'save' | 'poison' | 'no
   if (type === 'save') {
     if (!state.witchPotions.antidote) fail('解药已用完');
     if (!night.killTargetId) fail('今晚没有可救的玩家');
-    if (night.killTargetId === actor.id) fail('女巫不能自救');
+    if (night.killTargetId === actor.id && !witchMaySelfSave(state)) {
+      fail(getBoard(state).witchSelfSaveFirstNight ? '女巫只有首晚可以自救' : '女巫不能自救');
+    }
     night.witchAction = { type: 'save', targetId: night.killTargetId };
     state.witchPotions.antidote = false;
     log(state, now, `女巫使用解药救了 ${seatLabel(state, night.killTargetId)}`, false);

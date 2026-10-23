@@ -1,5 +1,5 @@
 // 测试工具：向房间加入 N 个机器人玩家，并按各自视图随机执行合法操作。
-// 用法：node scripts/bots.mjs <房间代码> [机器人数量=11] [服务器地址=http://localhost:5173]
+// 用法：node scripts/bots.mjs <房间代码> [机器人数量=填满剩余座位] [服务器地址=http://localhost:5173]
 // 机器人只能通过公开 API 拿到自己的视图，与真实手机玩家完全一样。
 const [code, countArg, baseArg] = process.argv.slice(2);
 if (!code) {
@@ -7,7 +7,6 @@ if (!code) {
   process.exit(1);
 }
 const BASE = baseArg ?? 'http://localhost:5173';
-const COUNT = Number(countArg ?? 11);
 const DELAY = Number(process.env.BOT_DELAY ?? 700);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -20,6 +19,9 @@ async function post(route, body) {
   return data;
 }
 
+const room = await post('state', { code });
+const COUNT = countArg && countArg !== 'auto' ? Number(countArg) : room.board.size - room.players.length;
+console.log(`${room.board.name}，当前 ${room.players.length}/${room.board.size} 人`);
 const bots = [];
 for (let i = 0; i < COUNT; i++) {
   try {

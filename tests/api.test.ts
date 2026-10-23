@@ -74,7 +74,8 @@ describe('API：房间与访问控制', () => {
     }
     const anon = (await call(store, 'state', { code: ps[0].code })).body as PlayerView;
     expect(anon.me).toBeNull();
-    expect(JSON.stringify(anon)).not.toMatch(/"role":"|werewolf|seer|witch|hunter|villager/);
+    // board 是公开的板子配置，除此之外不能出现任何身份
+    expect(JSON.stringify({ ...anon, board: null })).not.toMatch(/"role":"|werewolf|seer|witch|hunter|villager/);
   });
 });
 

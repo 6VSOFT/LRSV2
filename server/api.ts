@@ -1,6 +1,6 @@
 // 与运行环境无关的 API 处理器：Netlify Function 与本地 Vite 开发服务器共用
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { Action, addPlayer, applyAction, createGame, GameError, Rng, tick, touch } from '../shared/engine';
+import { Action, addPlayer, applyAction, createGame, GameError, parseBoardId, Rng, tick, touch } from '../shared/engine';
 import { GameState, Player } from '../shared/types';
 import { buildView } from '../shared/view';
 import { getRoomStore, RoomStore } from './store';
@@ -66,9 +66,10 @@ export async function handleApi(route: string, body: any, store: RoomStore = get
       case 'create': {
         const token = randomBytes(24).toString('hex');
         const playerId = randomBytes(6).toString('hex');
+        const board = parseBoardId(body.board);
         for (let i = 0; i < 10; i++) {
           const code = newCode();
-          const state = createGame(code, { id: playerId, nickname: body.nickname, tokenHash: hashToken(token) }, Date.now());
+          const state = createGame(code, { id: playerId, nickname: body.nickname, tokenHash: hashToken(token) }, Date.now(), board);
           if (await store.create(code, state)) return { status: 200, body: { code, token, playerId } };
         }
         throw new Error('无法生成房间代码，请重试');

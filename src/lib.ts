@@ -1,5 +1,5 @@
 import type { Action } from '../shared/engine';
-import type { PlayerView, Role } from '../shared/types';
+import type { BoardId, PlayerView, Role } from '../shared/types';
 
 export interface Session {
   code: string;
@@ -68,7 +68,7 @@ async function post<T>(route: string, body: unknown): Promise<T> {
 }
 
 export const api = {
-  create: (nickname: string) => post<Session>('create', { nickname }),
+  create: (nickname: string, board: BoardId) => post<Session>('create', { nickname, board }),
   join: (code: string, nickname: string, token?: string) => post<Session>('join', { code, nickname, token }),
   state: (code: string, token?: string) => post<PlayerView>('state', { code, token }),
   action: (s: Session, action: Action) => post<PlayerView>('action', { code: s.code, token: s.token, action }),
@@ -77,7 +77,7 @@ export const api = {
 export const ROLE_INFO: Record<Role, { name: string; team: string; desc: string; color: string }> = {
   werewolf: { name: '狼人', team: '狼人阵营', color: '#e5484d', desc: '每晚与狼队友共同选择击杀一名玩家（可自刀）。屠神或屠民即获胜。' },
   seer: { name: '预言家', team: '好人阵营 · 神职', color: '#8e7cff', desc: '每晚查验一名玩家，得知其是好人还是狼人。' },
-  witch: { name: '女巫', team: '好人阵营 · 神职', color: '#3dd68c', desc: '一瓶解药、一瓶毒药，每晚最多用一瓶，不能自救。用过解药后不再得知刀口。' },
+  witch: { name: '女巫', team: '好人阵营 · 神职', color: '#3dd68c', desc: '一瓶解药、一瓶毒药，每晚最多用一瓶。12 人局不能自救，9 人局仅首晚可自救。用过解药后不再得知刀口。' },
   hunter: { name: '猎人', team: '好人阵营 · 神职', color: '#f5a524', desc: '被狼人击杀或被放逐时可开枪带走一名玩家；被毒杀不能开枪。' },
   idiot: { name: '白痴', team: '好人阵营 · 神职', color: '#2ec8d6', desc: '白天被放逐时系统自动翻牌，公布白痴身份。' },
   villager: { name: '村民', team: '好人阵营 · 平民', color: '#c9a36b', desc: '没有特殊技能，依靠发言与投票找出狼人。' },

@@ -22,6 +22,42 @@ export const STANDARD_12: Role[] = [
   'villager', 'villager', 'villager', 'villager',
 ];
 
+/** 预女猎 9 人局 */
+export const STANDARD_9: Role[] = [
+  'werewolf', 'werewolf', 'werewolf',
+  'seer', 'witch', 'hunter',
+  'villager', 'villager', 'villager',
+];
+
+export type BoardId = 'std12' | 'pnl9';
+
+export interface Board {
+  id: BoardId;
+  name: string;
+  size: number;
+  roles: Role[];
+  /** 一句话配置说明 */
+  summary: string;
+  /** 女巫首晚可以自救 */
+  witchSelfSaveFirstNight: boolean;
+}
+
+export const BOARDS: Record<BoardId, Board> = {
+  std12: {
+    id: 'std12', name: '12 人预女猎白', size: 12, roles: STANDARD_12,
+    summary: '4 狼人 · 预言家 · 女巫 · 猎人 · 白痴 · 4 村民',
+    witchSelfSaveFirstNight: false,
+  },
+  pnl9: {
+    id: 'pnl9', name: '9 人预女猎', size: 9, roles: STANDARD_9,
+    summary: '3 狼人 · 预言家 · 女巫 · 猎人 · 3 村民',
+    witchSelfSaveFirstNight: true,
+  },
+};
+
+export const DEFAULT_BOARD: BoardId = 'std12';
+
+/** 所有板子中的最大人数 */
 export const MAX_PLAYERS = 12;
 
 export type Phase =
@@ -144,6 +180,8 @@ export interface LogEntry {
 
 export interface GameState {
   code: string;
+  /** 旧房间数据没有此字段时按 12 人局处理 */
+  board?: BoardId;
   createdAt: number;
   creatorId: string;
   settings: Settings;
@@ -220,6 +258,7 @@ export interface PrivateInfo {
 
 export interface PlayerView {
   code: string;
+  board: Board;
   serverNow: number;
   status: GameState['status'];
   phase: Phase;

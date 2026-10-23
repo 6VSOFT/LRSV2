@@ -46,9 +46,10 @@ export function SeatGrid(props: {
 }) {
   const { view, selectable, selected, onSelect, highlight = [], badges = {} } = props;
   const meId = view.me?.playerId;
-  const seats: (PublicPlayer | null)[] = Array.from({ length: 12 }, (_, i) => view.players.find((p) => p.seat === i + 1) ?? null);
+  const size = view.board.size;
+  const seats: (PublicPlayer | null)[] = Array.from({ length: size }, (_, i) => view.players.find((p) => p.seat === i + 1) ?? null);
   return (
-    <div className="seat-grid">
+    <div className={`seat-grid ${size % 4 === 0 ? '' : 'three'}`}>
       {seats.map((p, i) => {
         if (!p) return <div key={i} className="seat empty"><span className="seat-no">{i + 1}</span><span className="muted small">空位</span></div>;
         const can = !!selectable?.includes(p.id);

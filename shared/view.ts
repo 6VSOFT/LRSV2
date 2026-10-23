@@ -1,5 +1,5 @@
 // 按玩家身份裁剪状态：服务端只把该玩家有权知道的信息发给客户端
-import { isConnected, witchKnowsKill } from './engine';
+import { getBoard, isConnected, witchKnowsKill, witchMaySelfSave } from './engine';
 import { GameState, PlayerView, PrivateInfo, PublicPlayer } from './types';
 
 export function buildView(state: GameState, viewerId: string | null, now: number): PlayerView {
@@ -27,6 +27,7 @@ export function buildView(state: GameState, viewerId: string | null, now: number
 
   return {
     code: state.code,
+    board: getBoard(state),
     serverNow: now,
     status: state.status,
     phase: state.phase,
@@ -96,7 +97,7 @@ function buildPrivate(state: GameState, viewerId: string): PrivateInfo | null {
       canAct: witchTurn && !night!.witchDone,
       knownKillTargetId: knows ? night!.killTargetId : undefined,
       canSave: witchTurn && !night!.witchDone && state.witchPotions.antidote
-        && !!night!.killTargetId && night!.killTargetId !== me.id,
+        && !!night!.killTargetId && (night!.killTargetId !== me.id || witchMaySelfSave(state)),
       done: !!night?.witchDone && witchTurn,
     };
   }

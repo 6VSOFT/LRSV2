@@ -187,7 +187,11 @@ function WitchPanel({ view, act }: PanelProps) {
           ? w.knownKillTargetId ? <>今晚被狼人击杀的是：<b>{label(view, w.knownKillTargetId)}</b></> : '今晚没有人被狼人击杀'
           : '你已使用过解药，无法得知今晚刀口'}
       </div>
-      {knows && w.knownKillTargetId === view.me!.playerId && w.antidote && <p className="small red">女巫不能自救。</p>}
+      {knows && w.knownKillTargetId === view.me!.playerId && w.antidote && (
+        w.canSave
+          ? <p className="small gold">本局女巫首晚可以自救。</p>
+          : <p className="small red">{view.board.witchSelfSaveFirstNight ? '女巫只有首晚可以自救。' : '女巫不能自救。'}</p>
+      )}
       {mode === 'menu' ? (
         <div className="actions">
           <ConfirmButton

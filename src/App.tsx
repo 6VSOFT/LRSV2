@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { SHERIFF_BONUS_SECONDS, type Action } from '../shared/engine';
-import type { PlayerView } from '../shared/types';
+import { type Board, type BoardId, BOARDS, DEFAULT_BOARD, type PlayerView } from '../shared/types';
 import { ConfirmButton, RoleCard, RoleImage, SeatGrid } from './components';
 import { useTurnAlert, useWakeLock } from './turn';
 import { api, ApiError, clearSession, loadSession, PHASE_TITLE, rememberNickname, saveSession, Session } from './lib';
@@ -38,13 +38,14 @@ function Home() {
   const [joinCode, setJoinCode] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [board, setBoard] = useState<BoardId>(DEFAULT_BOARD);
 
   const create = async () => {
     setErr('');
     setBusy(true);
     try {
       rememberNickname(nickname.trim());
-      const s = await api.create(nickname);
+      const s = await api.create(nickname, board);
       saveSession(s);
       go(`/r/${s.code}`);
     } catch (e) {
@@ -59,14 +60,14 @@ function Home() {
       <header className="hero">
         <img src="/roles/icon.svg" width={88} height={88} alt="" className="hero-icon" />
         <h1>狼人杀自动法官</h1>
-        <p className="muted">12 人预女猎白 · 无需真人法官 · 无需身份牌</p>
+        <p className="muted">预女猎白 12 人 · 预女猎 9 人 · 无需真人法官 · 无需身份牌</p>
       </header>
       <section className="card">
         <label className="field">
           <span>你的昵称</span>
           <input value={nickname} maxLength={12} placeholder="最多 12 个字" onChange={(e) => setNickname(e.target.value)} />
         </label>
-        <button className="btn primary" disabled={busy || !nickname.trim()} onClick={create}>创建房间</button>
+        <button className="btn primary" disabled={busy || !nickname.trim()} onClick={create}>创建房间 · {BOARDS[board].name}</button>
       </section>
       <section className="card">
         <label className="field">
@@ -77,17 +78,32 @@ function Home() {
         <button className="btn" disabled={joinCode.length < 4} onClick={() => go(`/r/${joinCode}`)}>加入房间</button>
       </section>
       {err && <div className="error">{err}</div>}
-      <section className="roles-strip">
-        {(['werewolf', 'seer', 'witch', 'hunter', 'idiot', 'villager'] as const).map((r) => <RoleImage key={r} role={r} size={52} />)}
+      <div className="small muted board-title">选择板子（创建房间时使用）</div>
+      <div className="board-list" role="radiogroup" aria-label="选择板子">
+        {(['std12', 'pnl9'] as const).map((id) => <BoardOption key={id} board={BOARDS[id]} selected={board === id} onSelect={() => setBoard(id)} />)}
+      </div>
+      <section className="card coming-soon" aria-disabled="true">
+        <span className="coming-icon">🔒</span>
+        <span>新板子即将上线</span>
       </section>
-      <p className="tiny muted center">4 狼人 · 预言家 · 女巫 · 猎人 · 白痴 · 4 村民 ｜ 屠边规则</p>
-      {[0, 1].map((i) => (
-        <section key={i} className="card coming-soon" aria-disabled="true">
-          <span className="coming-icon">🔒</span>
-          <span>新板子即将上线</span>
-        </section>
-      ))}
     </main>
+  );
+}
+
+function BoardOption({ board, selected, onSelect }: { board: Board; selected: boolean; onSelect: () => void }) {
+  const roleTypes = [...new Set(board.roles)];
+  return (
+    <button className={`card board-option ${selected ? 'on' : ''}`} role="radio" aria-checked={selected} onClick={onSelect}>
+      <div className="board-head">
+        <span className="board-name">{board.name}</span>
+        <span className={`board-check ${selected ? 'on' : ''}`}>{selected ? '✓ 已选择' : '选择'}</span>
+      </div>
+      <div className="roles-strip">
+        {roleTypes.map((r) => <RoleImage key={r} role={r} size={42} />)}
+      </div>
+      <div className="tiny muted">{board.summary} ｜ 屠边规则</div>
+      <div className="tiny gold">{board.witchSelfSaveFirstNight ? '女巫仅首晚可以自救' : '女巫全程不可自救'}</div>
+    </button>
   );
 }
 
@@ -97,17 +113,19 @@ function JoinForm({ code, view, onJoined }: { code: string; view: PlayerView | n
   const [nickname, setNickname] = useState(rememberNickname());
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
-  const full = (view?.players.length ?? 0) >= 12;
+  const size = view?.board.size ?? 12;
+  const full = (view?.players.length ?? 0) >= size;
   const started = view && view.status !== 'lobby';
   return (
     <main className="page">
       <header className="topbar"><button className="link" onClick={() => go('/')}>‹ 首页</button><span>房间 {code}</span><span /></header>
       <section className="card">
         <h2>加入房间 {code}</h2>
+        {view && <p className="small gold">{view.board.name}：{view.board.summary}</p>}
         {started ? <p className="error">游戏已经开始，无法加入。若你是房间玩家，请使用原设备打开。</p>
-          : full ? <p className="error">房间已满（12 人）。</p> : (
+          : full ? <p className="error">房间已满（{size} 人）。</p> : (
             <>
-              <p className="muted small">当前 {view?.players.length ?? 0}/12 人</p>
+              <p className="muted small">当前 {view?.players.length ?? 0}/{size} 人</p>
               <label className="field">
                 <span>你的昵称</span>
                 <input value={nickname} maxLength={12} onChange={(e) => setNickname(e.target.value)} />
@@ -224,7 +242,7 @@ function RoomPage({ code }: { code: string }) {
         <button className="link" onClick={() => go('/')}>‹</button>
         <div className="center">
           <div className="phase-title">{PHASE_TITLE[view.phase]}</div>
-          <div className="tiny muted">房间 {view.code}{view.status !== 'lobby' && ` · 第 ${view.day} ${view.phase === 'night' ? '夜' : '天'} · 存活 ${aliveCount}/12`}</div>
+          <div className="tiny muted">房间 {view.code}{view.status !== 'lobby' && ` · 第 ${view.day} ${view.phase === 'night' ? '夜' : '天'} · 存活 ${aliveCount}/${view.board.size}`}</div>
         </div>
         <div className="me-chip">{me ? `${me.seat}号` : ''}{me && !me.alive ? '·出局' : ''}</div>
       </header>
@@ -317,12 +335,15 @@ function Lobby({ view, act, code }: { view: PlayerView; act: (a: Action) => Prom
     QRCode.toDataURL(url, { margin: 1, width: 220, color: { dark: '#0b0d18', light: '#ffffff' } }).then(setQr).catch(() => setQr(''));
   }, [url]);
   const readyCount = view.players.filter((p) => p.ready).length;
-  const canStart = view.players.length === 12 && readyCount === 12;
-  const freeSeats = Array.from({ length: 12 }, (_, i) => i + 1).filter((s) => !view.players.some((p) => p.seat === s));
+  const size = view.board.size;
+  const hasIdiot = view.board.roles.includes('idiot');
+  const canStart = view.players.length === size && readyCount === size;
+  const freeSeats = Array.from({ length: size }, (_, i) => i + 1).filter((s) => !view.players.some((p) => p.seat === s));
 
   return (
     <>
       <section className="card center">
+        <div className="board-badge">{view.board.name}</div>
         <div className="small muted">房间代码</div>
         <div className="room-code">{code}</div>
         {qr && <img className="qr" src={qr} alt="加入房间二维码" width={180} height={180} />}
@@ -336,7 +357,7 @@ function Lobby({ view, act, code }: { view: PlayerView; act: (a: Action) => Prom
         </div>
       </section>
       <section className="card">
-        <h3>玩家 {view.players.length}/12 · 已准备 {readyCount}/12</h3>
+        <h3>玩家 {view.players.length}/{size} · 已准备 {readyCount}/{size}</h3>
         <SeatGrid
           view={view}
           badges={Object.fromEntries(view.players.map((p) => [p.id, [p.ready ? { text: '已准备', tone: 'green' as const } : { text: '未准备', tone: 'gray' as const }, ...(p.isCreator ? [{ text: '房主', tone: 'gold' as const }] : [])]]))}
@@ -352,7 +373,7 @@ function Lobby({ view, act, code }: { view: PlayerView; act: (a: Action) => Prom
           </button>
           {isCreator && (
             <ConfirmButton
-              label={canStart ? '开始游戏' : `开始游戏（需 12 人全部准备）`}
+              label={canStart ? '开始游戏' : `开始游戏（需 ${size} 人全部准备）`}
               disabled={!canStart}
               confirmText="确认开始游戏？系统将随机发放身份并进入第一夜。"
               onConfirm={() => act({ type: 'start' })}
@@ -368,16 +389,16 @@ function Lobby({ view, act, code }: { view: PlayerView; act: (a: Action) => Prom
       <section className="card small">
         <h3>本局规则</h3>
         <ul className="rules">
-          <li>4 狼人 · 预言家 · 女巫 · 猎人 · 白痴 · 4 村民，屠边胜负。</li>
-          <li>女巫不可自救，同一晚不能双药；用过解药后不再得知刀口。</li>
+          <li>{view.board.name}：{view.board.summary}，屠边胜负。</li>
+          <li>女巫{view.board.witchSelfSaveFirstNight ? '仅首晚可以自救' : '不可自救'}，同一晚不能双药；用过解药后不再得知刀口。</li>
           <li>猎人被狼刀或被放逐可开枪，被毒杀不能开枪。</li>
           <li>首日竞选警长；警长归票时 1.5 票。</li>
-          <li>
+          {hasIdiot && <li>
             白痴被放逐时自动翻牌：{view.settings.idiotFlipSurvives ? '翻牌免死，但失去投票权（经典规则）' : '公布身份后仍然出局（本项目默认）'}
             {isCreator && (
               <button className="chip" onClick={() => act({ type: 'settings', settings: { idiotFlipSurvives: !view.settings.idiotFlipSurvives } }).catch(() => undefined)}>切换</button>
             )}
-          </li>
+          </li>}
           <li>
             发言倒计时 {view.settings.speechSeconds} 秒，警长 {view.settings.speechSeconds + SHERIFF_BONUS_SECONDS} 秒（仅提示）
             {isCreator && [60, 90, 120, 180].map((s) => (

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { addPlayer, applyAction, createGame, evaluateWinner, GameError, speechOrderFrom } from '../shared/engine';
 import { buildView } from '../shared/view';
 import { STANDARD_12 } from '../shared/types';
-import { Game, T0 } from './helpers';
+import { Game, playRandom, shuffleRoles, T0 } from './helpers';
 
 const expectErr = (fn: () => void, msg?: RegExp) => {
   expect(fn).toThrow(GameError);
@@ -63,7 +63,8 @@ describe('信息保密（视图裁剪）', () => {
     expect(v.me!.role).toBe('villager');
     expect(v.me!.teammates).toEqual([]);
     expect(v.log.every((l) => l.public)).toBe(true);
-    expect(JSON.stringify(v)).not.toContain('werewolf');
+    // board 是公开的板子配置，除此之外不能出现任何身份
+    expect(JSON.stringify({ ...v, board: null })).not.toContain('werewolf');
 
     const wv = buildView(g.state, g.id(1), g.now);
     expect(wv.me!.teammates.sort()).toEqual(['p2', 'p3', 'p4']);
@@ -532,7 +533,8 @@ describe('完整对局模拟', () => {
       const rng = () => ((x = (x * 9301 + 49297) % 233280) / 233280);
       const g = new Game({ idiotFlipSurvives: seed % 2 === 0 });
       g.rng = rng;
-      g.state.players.forEach((p, i) => (p.role = shuffleRoles(rng)[i]));
+      const roles = shuffleRoles(STANDARD_12, rng);
+      g.state.players.forEach((p, i) => (p.role = roles[i]));
       playRandom(g, rng);
       expect(g.state.status).toBe('ended');
       expect(g.state.winner).not.toBeNull();
@@ -542,84 +544,3 @@ describe('完整对局模拟', () => {
   });
 });
 
-function shuffleRoles(rng: () => number) {
-  const a = STANDARD_12.slice();
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
-function pick<T>(arr: T[], rng: () => number): T {
-  return arr[Math.floor(rng() * arr.length)];
-}
-
-/** 每一步由合法玩家随机做出合法操作，直到游戏结束 */
-function playRandom(g: Game, rng: () => number) {
-  for (let step = 0; step < 2000 && g.state.status === 'playing'; step++) {
-    const s = g.state;
-    const alive = s.players.filter((p) => p.alive);
-    const aliveIds = alive.map((p) => p.id);
-    const seatOf = (id: string) => s.players.find((p) => p.id === id)!.seat;
-    switch (s.phase) {
-      case 'night': {
-        const n = s.night!;
-        if (n.step === 'wolf_seer') {
-          const wolf = alive.find((p) => p.role === 'werewolf' && !n.wolfVotes[p.id]?.locked);
-          if (wolf) { g.act(wolf.seat, { type: 'wolf_pick', targetId: pick(aliveIds, rng), lock: true }); break; }
-          const seer = alive.find((p) => p.role === 'seer');
-          if (seer && !n.seerTargetId) { g.act(seer.seat, { type: 'seer_check', targetId: pick(aliveIds, rng) }); break; }
-          g.wait(30_000);
-        } else {
-          const witch = alive.find((p) => p.role === 'witch');
-          if (!witch) { g.wait(30_000); break; }
-          const r = rng();
-          if (r < 0.3 && s.witchPotions.antidote && n.killTargetId && n.killTargetId !== witch.id) g.act(witch.seat, { type: 'witch', action: 'save' });
-          else if (r < 0.5 && s.witchPotions.poison) g.act(witch.seat, { type: 'witch', action: 'poison', targetId: pick(aliveIds, rng) });
-          else g.act(witch.seat, { type: 'witch', action: 'none' });
-        }
-        break;
-      }
-      case 'dawn': g.act(1, { type: 'continue' }); break;
-      case 'hunter': {
-        const e = s.effects[0];
-        const targets = aliveIds.filter((id) => id !== e.playerId);
-        g.act(seatOf(e.playerId), { type: 'hunter_shoot', targetId: rng() < 0.8 ? pick(targets, rng) : null });
-        break;
-      }
-      case 'badge': {
-        const e = s.effects[0];
-        const targets = aliveIds.filter((id) => id !== e.playerId);
-        g.act(seatOf(e.playerId), { type: 'badge', targetId: rng() < 0.7 ? pick(targets, rng) : null });
-        break;
-      }
-      case 'exile_confirm': g.act(seatOf(s.exiledPendingId!), { type: 'exile_confirm' }); break;
-      case 'sheriff_signup': {
-        const p = alive.find((x) => !(x.id in s.election!.signup))!;
-        g.act(p.seat, { type: 'sheriff_signup', join: rng() < 0.3 });
-        break;
-      }
-      case 'sheriff_speech': case 'day_speech': case 'exile_pk_speech': {
-        const cur = s.speech!.order[s.speech!.index];
-        const el = s.election;
-        if (s.speech!.purpose === 'sheriff' && el && rng() < 0.1) {
-          const c = el.candidates.find((id) => !el.withdrawn.includes(id));
-          if (c) { g.act(seatOf(c), { type: 'sheriff_withdraw' }); break; }
-        }
-        g.act(seatOf(cur), { type: 'speech_done' });
-        break;
-      }
-      case 'speech_order': g.act(seatOf(s.sheriffId!), { type: 'speech_order', direction: rng() < 0.5 ? 'cw' : 'ccw' }); break;
-      case 'sheriff_suggest': g.act(seatOf(s.sheriffId!), { type: 'sheriff_suggest', targetId: rng() < 0.7 ? pick(aliveIds, rng) : null }); break;
-      case 'sheriff_vote': case 'exile_vote': {
-        const v = s.vote!;
-        const voter = v.voters.find((id) => !(id in v.ballots))!;
-        const targets = v.targets.filter((id) => !(v.kind === 'sheriff' && id === voter));
-        g.act(seatOf(voter), { type: 'vote', targetId: rng() < 0.9 && targets.length ? pick(targets, rng) : null });
-        break;
-      }
-      default: throw new Error('unexpected phase ' + s.phase);
-    }
-  }
-}
