@@ -81,6 +81,12 @@ function Home() {
         {(['werewolf', 'seer', 'witch', 'hunter', 'idiot', 'villager'] as const).map((r) => <RoleImage key={r} role={r} size={52} />)}
       </section>
       <p className="tiny muted center">4 狼人 · 预言家 · 女巫 · 猎人 · 白痴 · 4 村民 ｜ 屠边规则</p>
+      {[0, 1].map((i) => (
+        <section key={i} className="card coming-soon" aria-disabled="true">
+          <span className="coming-icon">🔒</span>
+          <span>新板子即将上线</span>
+        </section>
+      ))}
     </main>
   );
 }

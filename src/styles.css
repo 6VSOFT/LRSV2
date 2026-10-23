@@ -62,6 +62,23 @@ p { margin: 6px 0 10px; }
 
 .hero { text-align: center; padding: 24px 0 8px; }
 .hero-icon { border-radius: 22px; box-shadow: 0 10px 30px rgba(124, 108, 255, 0.35); }
+.coming-soon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 72px;
+  border-style: dashed;
+  border-color: #3a4180;
+  color: var(--muted);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  background: linear-gradient(180deg, rgba(23, 27, 51, 0.6) 0%, rgba(18, 21, 42, 0.6) 100%);
+  box-shadow: none;
+  user-select: none;
+}
+.coming-icon { font-size: 18px; opacity: 0.8; }
 .roles-strip { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; opacity: 0.9; }
 
 .topbar {
