@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 520" role="img" aria-labelledby="villager-title villager-desc">
+<title id="villager-title">villager</title>
+<desc id="villager-desc">Hand-crafted moonlit party game character card.</desc>
+<defs>
+<linearGradient id="villager-bg" x2=".7" y2="1"><stop stop-color="#101523"/><stop offset="1" stop-color="#090d18"/></linearGradient>
+<radialGradient id="villager-glow" cx=".5" cy=".4" r=".65"><stop stop-color="#906a3a" stop-opacity=".6"/><stop offset="1" stop-color="#101322" stop-opacity="0"/></radialGradient>
+<linearGradient id="villager-cloak" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#786046"/><stop offset="1" stop-color="#292830"/></linearGradient>
+<linearGradient id="villager-hat" x2=".85" y2="1"><stop stop-color="#8c7353"/><stop offset="1" stop-color="#584535"/></linearGradient>
+<linearGradient id="villager-skin" x2=".9" y2="1"><stop stop-color="#e3bc90"/><stop offset="1" stop-color="#b7896e"/></linearGradient>
+<radialGradient id="villager-moon" cx=".35" cy=".3"><stop stop-color="#fff2d1"/><stop offset="1" stop-color="#f8e2af"/></radialGradient>
+<linearGradient id="villager-fur" x2=".8" y2="1"><stop stop-color="#576275"/><stop offset=".55" stop-color="#30364b"/><stop offset="1" stop-color="#242233"/></linearGradient>
+<radialGradient id="villager-aura"><stop stop-color="#f8e2af" stop-opacity=".45"/><stop offset="1" stop-color="#f8e2af" stop-opacity="0"/></radialGradient>
+<radialGradient id="villager-orb" cx=".38" cy=".32" r=".75"><stop stop-color="#c2fff6" stop-opacity=".9"/><stop offset=".4" stop-color="#4fbaca" stop-opacity=".75"/><stop offset=".8" stop-color="#3c5988"/><stop offset="1" stop-color="#a29ae1"/></radialGradient>
+<linearGradient id="villager-green" x2="0" y2="1"><stop stop-color="#b5f28e"/><stop offset="1" stop-color="#368c68"/></linearGradient>
+<linearGradient id="villager-poison" x2="0" y2="1"><stop stop-color="#d797ee"/><stop offset="1" stop-color="#8051bd"/></linearGradient>
+<radialGradient id="villager-lantern"><stop stop-color="#fff4b4"/><stop offset="1" stop-color="#c48739"/></radialGradient>
+</defs>
+<rect x="8" y="8" width="384" height="504" rx="27" fill="url(#villager-bg)" stroke="#906a3a" stroke-width="2"/>
+<rect x="16" y="16" width="368" height="488" rx="21" fill="url(#villager-glow)" stroke="#d7bd83" stroke-opacity=".4"/>
+<path d="M30 86V48q0-18 18-18h39m226 0h39q18 0 18 18v38M30 434v38q0 18 18 18h39m226 0h39q18 0 18-18v-38" fill="none" stroke="#c6aa76" stroke-opacity=".55"/>
+<g fill="#e4d2a2" opacity=".65"><circle cx="58" cy="107" r="1.5"/><circle cx="329" cy="75" r="1.5"/><circle cx="308" cy="258" r="1"/><circle cx="76" cy="251" r="1"/><path d="m345 137 2 5 5 2-5 2-2 5-2-5-5-2 5-2ZM66 202l2 4 4 2-4 2-2 4-2-4-4-2 4-2Z"/></g>
+<!-- Quiet village rooftops -->
+<circle cx="122" cy="112" r="48" fill="url(#villager-moon)" opacity=".55"/>
+<g fill="#252938" stroke="#4b4850" stroke-width="1.5"><path d="M30 350v-81l47-39 46 39v81Zm251 0V241l45-33 45 33v109Z"/><path d="m26 270 51-45 50 45m149-26 50-42 50 42" fill="none"/><path d="M342 216v-28h12v37"/></g>
+<g fill="#c29354" opacity=".5"><path d="M66 281h16v25H66Zm253-26h14v23h-14Z"/></g>
+<!-- Humble wool coat -->
+<path d="M76 467 92 346l55-66h100l46 67 27 120Z" fill="url(#villager-cloak)" stroke="#96816b" stroke-width="2"/>
+<path d="m150 286 50 22 47-22-15 177h-66Z" fill="#504132"/>
+<path d="m146 286-22 42 32 13-13 22 41 37-7-95Zm104-1 23 44-33 13 13 22-37 35 5-94Z" fill="#897052" stroke="#b19a77" stroke-width="1.5"/>
+<path d="m108 353-12 76 39 7 19-71m132-12 12 50-34 16-22-57" fill="#6b5440" stroke="#9e866a" stroke-width="2"/>
+<path d="m117 421 28 2-3 34h-29Z" fill="#4a3c32" stroke="#a48b68" stroke-dasharray="3 4"/>
+<!-- Hair, ears and kindly face -->
+<path d="M141 174q-19 26-5 66l23 16 83-1 23-17q12-38-7-66Z" fill="#3c3030"/>
+<ellipse cx="151" cy="216" rx="11" ry="17" fill="#ba8b6c"/><ellipse cx="248" cy="216" rx="11" ry="17" fill="#ba8b6c"/>
+<path d="m153 178 4 60 23 30 20 9 21-9 23-30 3-60-47-20Z" fill="url(#villager-skin)"/>
+<path d="m155 182 16 21 21-17 23 13 30-18-23-25-45 4Z" fill="#584136"/>
+<path d="m164 216 19-2m34 0 19 2" stroke="#5e4839" stroke-width="4" stroke-linecap="round"/>
+<g fill="#333433"><ellipse cx="176" cy="224" rx="3" ry="4"/><ellipse cx="224" cy="224" rx="3" ry="4"/></g>
+<path d="m200 222-5 18 9 1m-18 12q14 10 28-1" fill="none" stroke="#996c55" stroke-width="2" stroke-linecap="round"/>
+<path d="m166 244 10 4m48 0 10-4" stroke="#d49b76" stroke-width="3" stroke-linecap="round"/>
+<!-- Soft cap -->
+<path d="M140 183q-10-39 15-67 27-30 78-16 31 11 31 59l-15 26Z" fill="url(#villager-hat)" stroke="#b29a7a" stroke-width="2"/>
+<path d="M154 145q20-36 65-31m-63 39 73-15" fill="none" stroke="#a18a6c" stroke-width="3" stroke-linecap="round"/>
+<path d="M137 171q62-20 125 0l-4 22q-61-17-118 0Z" fill="#463a32" stroke="#b09a76" stroke-width="2"/>
+<path d="m156 279 42 17 44-17-9 29-35 11-32-11Z" fill="#b59b70"/>
+<path d="m190 318 12 0 1 145h-12Z" fill="#776044"/>
+<g fill="#cfb17d"><circle cx="197" cy="344" r="3"/><circle cx="197" cy="380" r="3"/><circle cx="197" cy="418" r="3"/></g>
+<!-- Large warm lantern and hand -->
+<circle cx="292" cy="352" r="79" fill="url(#villager-aura)"/>
+<path d="M275 315v-20a17 17 0 0 1 34 0v20" fill="none" stroke="#c7a670" stroke-width="5"/>
+<path d="m261 332 15-24h32l16 24-7 10h-48Z" fill="#7d633e" stroke="#dbbc7b" stroke-width="2"/>
+<path d="m269 338 48 0 6 67-61 0Z" fill="url(#villager-lantern)" stroke="#e5c782" stroke-width="2"/>
+<path d="M294 353c-2 15-20 22-14 36 6 13 24 12 28-2 4-13-9-20-14-34Z" fill="#ffdb77"/>
+<path d="M294 373c-2 8-8 11-6 18 3 6 10 6 12-1 2-5-3-10-6-17Z" fill="#fff6cc"/>
+<path d="m270 339-5 65m50-65 5 65m-28-64v64" stroke="#a0814e" stroke-width="4"/>
+<path d="m259 405 66 0-3 13h-60Z" fill="#6a573c" stroke="#d5b77c" stroke-width="2"/>
+<path d="m269 421 47 0" stroke="#b99b66" stroke-width="3" stroke-linecap="round"/>
+<path d="m268 289 12-9 18 3 9 10-4 9-11-6-13-1-5 10-12-3Z" fill="url(#villager-skin)" stroke="#c89b73" stroke-width="1.5"/>
+<path d="m250 308 17-23 17 12-13 29Z" fill="#8a7153" stroke="#bca57d" stroke-width="2"/>
+<!-- Ground and small grasses -->
+<path d="m57 451 6-18 6 18 3-11m266 9 6-24 2 23 9-11" fill="none" stroke="#827958" stroke-width="2"/>
+<!-- Signature frame ornaments -->
+<path d="M112 483h64m48 0h64m-97 0 9-9 9 9-9 9Z" fill="none" stroke="#c6aa76" stroke-opacity=".7"/>
+<circle cx="200" cy="483" r="2" fill="#e2c98b"/>
+</svg>

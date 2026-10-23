@@ -1,0 +1,17 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[functions]
+  node_bundler = "esbuild"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+# SPA 路由：/room/XXXX 等前端路由回退到 index.html（/api/* 由函数处理）
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
