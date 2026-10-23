@@ -169,9 +169,6 @@ export function PrivateNotes({ view }: { view: PlayerView }) {
   const nightActing = view.phase === 'night'
     && (me.wolfCanAct || me.seerCanAct || !!me.witch?.canAct || !!me.wolfVotes || !!me.hunterNight?.canAck);
   if (nightActing) return null;
-  if (me.role === 'werewolf') {
-    return <div className="card slim small">🐺 狼队友：{me.teammates.map((id) => label(view, id)).join('、')}</div>;
-  }
   if (me.role === 'seer' && me.seerChecks.length > 0 && view.phase !== 'night') {
     return <div className="card slim"><SeerHistory view={view} /></div>;
   }

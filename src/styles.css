@@ -196,6 +196,9 @@ input:focus { border-color: var(--primary); }
 .role-img { display: block; border-radius: 12px; height: auto; }
 .role-text { flex: 1; }
 .role-name { font-size: 22px; font-weight: 800; }
+.teammates { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 14px; font-weight: 600; margin-top: 4px; }
+.teammates .tag { font-size: 14px; line-height: 22px; padding: 0 8px; }
+.teammates .tag.gone { opacity: 0.55; text-decoration: line-through; }
 
 .board-badge { display: inline-block; font-size: 13px; padding: 2px 12px; border-radius: 999px; background: var(--primary2); color: #fff; margin-bottom: 8px; }
 .room-code { font-size: 40px; font-weight: 800; letter-spacing: 6px; margin: 2px 0 10px; color: var(--gold); }

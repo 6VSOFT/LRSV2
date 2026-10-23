@@ -7,7 +7,7 @@ export function RoleImage({ role, size = 120 }: { role: Role | 'back'; size?: nu
   return <img className="role-img" src={src} width={size} height={Math.round(size * 1.3)} alt={role === 'back' ? '身份牌背面' : ROLE_INFO[role].name} />;
 }
 
-export function RoleCard({ role }: { role: Role }) {
+export function RoleCard({ role, extra }: { role: Role; extra?: ReactNode }) {
   const [shown, setShown] = useState(false);
   const info = ROLE_INFO[role];
   return (
@@ -20,6 +20,7 @@ export function RoleCard({ role }: { role: Role }) {
           <div className="role-name" style={{ color: info.color }}>{info.name}</div>
           <div className="muted small">{info.team}</div>
           <p className="small">{info.desc}</p>
+          {extra}
         </div>
       ) : (
         <div className="role-text">

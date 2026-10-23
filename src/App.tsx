@@ -254,7 +254,21 @@ function RoomPage({ code }: { code: string }) {
         <Lobby view={view} act={act} code={code} />
       ) : (
         <>
-          {view.me?.role && view.status === 'playing' && <RoleCard role={view.me.role} />}
+          {view.me?.role && view.status === 'playing' && (
+            <RoleCard
+              role={view.me.role}
+              extra={view.me.role === 'werewolf' && (
+                <div className="teammates">
+                  🐺 狼队友：{view.me.teammates.length
+                    ? view.me.teammates.map((id) => {
+                      const p = view.players.find((x) => x.id === id)!;
+                      return <span key={id} className={`tag red ${p.alive ? '' : 'gone'}`}>{p.seat}号{p.alive ? '' : '·出局'}</span>;
+                    })
+                    : '无'}
+                </div>
+              )}
+            />
+          )}
           {view.status === 'playing' && <PrivateNotes view={view} />}
           <PhasePanel view={view} act={act} offset={offset} />
           {view.status === 'playing' && view.phase !== 'night' && !['sheriff_vote', 'exile_vote'].includes(view.phase) && view.voteResults.length > 0
