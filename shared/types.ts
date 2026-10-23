@@ -106,17 +106,21 @@ export interface WolfVote {
   locked: boolean;
 }
 
+/** 夜间行动严格按顺序进行：狼人 → 女巫 → 预言家 → 猎人状态确认 */
+export type NightStep = 'wolf' | 'witch' | 'seer' | 'hunter';
+export const NIGHT_STEPS: NightStep[] = ['wolf', 'witch', 'seer', 'hunter'];
+
 export interface NightState {
-  step: 'wolf_seer' | 'witch';
+  step: NightStep;
   stepStartedAt: number;
   wolfVotes: Record<string, WolfVote>;
   killTargetId: string | null;
-  seerTargetId: string | null;
-  /** 预言家已死亡时，用随机等待时间掩盖其不存在 */
-  seerFakeUntil: number | null;
   witchDone: boolean;
   witchAction: { type: 'save' | 'poison' | 'none'; targetId: string | null } | null;
-  witchFakeUntil: number | null;
+  seerTargetId: string | null;
+  hunterAcked: boolean;
+  /** 该步骤角色已出局（或本局没有该角色）时，用随机等待时间掩盖，避免通过夜晚节奏推断身份 */
+  fakeUntil: number | null;
 }
 
 export interface SeerCheck {
@@ -241,6 +245,8 @@ export interface PrivateInfo {
   seerChecks: SeerCheck[];
   seerCanAct: boolean;
   wolfCanAct: boolean;
+  /** 夜间猎人状态确认步骤：系统告知当晚是否具备开枪资格 */
+  hunterNight: { canAck: boolean; canShoot: boolean } | null;
   witch: {
     antidote: boolean;
     poison: boolean;

@@ -73,15 +73,16 @@ describe('信息保密（视图裁剪）', () => {
 
   it('夜间刀口只有狼人（和有资格的女巫）可见，查验结果只有预言家可见', () => {
     const g = new Game();
-    for (const s of [1, 2, 3, 4]) g.act(s, { type: 'wolf_pick', targetId: g.id(10), lock: true });
-    g.act(5, { type: 'seer_check', targetId: g.id(2) });
+    g.wolvesKill(10);
     const villagerView = JSON.stringify(buildView(g.state, g.id(9), g.now));
     expect(villagerView).not.toContain('wolfVotes":{');
-    expect(buildView(g.state, g.id(9), g.now).me!.seerChecks).toEqual([]);
-    expect(buildView(g.state, g.id(5), g.now).me!.seerChecks).toEqual([{ night: 1, targetId: 'p2', isWolf: true }]);
     const witch = buildView(g.state, g.id(6), g.now).me!.witch!;
     expect(witch.knownKillTargetId).toBe('p10');
     expect(buildView(g.state, g.id(7), g.now).me!.witch).toBeNull();
+    g.witchStep();
+    g.act(5, { type: 'seer_check', targetId: g.id(2) });
+    expect(buildView(g.state, g.id(9), g.now).me!.seerChecks).toEqual([]);
+    expect(buildView(g.state, g.id(5), g.now).me!.seerChecks).toEqual([{ night: 1, targetId: 'p2', isWolf: true }]);
     // 公共阶段不暴露夜间子步骤
     expect(JSON.stringify(buildView(g.state, g.id(9), g.now))).not.toContain('"step"');
   });
@@ -97,6 +98,70 @@ describe('信息保密（视图裁剪）', () => {
   });
 });
 
+describe('夜间行动顺序：狼人 → 女巫 → 预言家 → 猎人', () => {
+  it('上一步未完成时，下一步角色不能行动', () => {
+    const g = new Game();
+    expect(g.state.night!.step).toBe('wolf');
+    expectErr(() => g.act(6, { type: 'witch', action: 'none' }), /不是你的行动时间/);
+    expectErr(() => g.act(5, { type: 'seer_check', targetId: g.id(1) }), /不是你的行动时间/);
+    expectErr(() => g.act(7, { type: 'hunter_ack' }), /不是你的行动时间/);
+    // 只有部分狼人锁定，仍停留在狼人步骤
+    g.act(1, { type: 'wolf_pick', targetId: g.id(9), lock: true });
+    expect(g.state.night!.step).toBe('wolf');
+    for (const s of [2, 3, 4]) g.act(s, { type: 'wolf_pick', targetId: g.id(9), lock: true });
+    expect(g.state.night!.step).toBe('witch');
+    expectErr(() => g.act(5, { type: 'seer_check', targetId: g.id(1) }), /不是你的行动时间/);
+    g.witchStep();
+    expect(g.state.night!.step).toBe('seer');
+    expectErr(() => g.act(7, { type: 'hunter_ack' }), /不是你的行动时间/);
+    g.seerStep(1);
+    expect(g.state.night!.step).toBe('hunter');
+    expect(g.state.phase).toBe('night');
+    g.act(7, { type: 'hunter_ack' });
+    expect(g.state.phase).toBe('dawn');
+  });
+
+  it('各步骤只对对应角色显示行动界面', () => {
+    const g = new Game();
+    expect(buildView(g.state, g.id(1), g.now).me!.wolfCanAct).toBe(true);
+    expect(buildView(g.state, g.id(6), g.now).me!.witch!.canAct).toBe(false);
+    expect(buildView(g.state, g.id(5), g.now).me!.seerCanAct).toBe(false);
+    g.wolvesKill(9);
+    expect(buildView(g.state, g.id(1), g.now).me!.wolfCanAct).toBe(false);
+    expect(buildView(g.state, g.id(6), g.now).me!.witch!.canAct).toBe(true);
+    g.witchStep();
+    expect(buildView(g.state, g.id(5), g.now).me!.seerCanAct).toBe(true);
+    expect(buildView(g.state, g.id(7), g.now).me!.hunterNight).toBeNull();
+    g.seerStep(1);
+    expect(buildView(g.state, g.id(7), g.now).me!.hunterNight).toEqual({ canAck: true, canShoot: true });
+  });
+
+  it('猎人状态确认：被女巫毒杀时告知不具备开枪资格，且不能重复确认', () => {
+    const g = new Game();
+    g.wolvesKill(9);
+    g.act(6, { type: 'witch', action: 'poison', targetId: g.id(7) });
+    g.seerStep(1);
+    expect(buildView(g.state, g.id(7), g.now).me!.hunterNight).toEqual({ canAck: true, canShoot: false });
+    expectErr(() => g.act(9, { type: 'hunter_ack' }), /猎人/);
+    g.act(7, { type: 'hunter_ack' });
+    expect(g.p(7).alive).toBe(false);
+    expect(g.p(7).deathCause).toBe('poison');
+    g.act(1, { type: 'continue' });
+    expect(g.state.phase).toBe('sheriff_signup'); // 被毒不能开枪，自动跳过
+  });
+
+  it('被狼人击杀的猎人在确认时具备开枪资格，天亮后可以开枪', () => {
+    const g = new Game();
+    g.wolvesKill(7);
+    g.witchStep();
+    g.seerStep(1);
+    expect(buildView(g.state, g.id(7), g.now).me!.hunterNight!.canShoot).toBe(true);
+    g.hunterStep();
+    g.act(1, { type: 'continue' });
+    expect(g.state.phase).toBe('hunter');
+  });
+});
+
 describe('狼人行动', () => {
   it('票数最多者为刀口，锁定后不能修改', () => {
     const g = new Game();
@@ -106,7 +171,6 @@ describe('狼人行动', () => {
     g.act(2, { type: 'wolf_pick', targetId: g.id(9), lock: true });
     g.act(3, { type: 'wolf_pick', targetId: g.id(10), lock: true });
     g.act(4, { type: 'wolf_pick', targetId: g.id(9), lock: true });
-    g.act(5, { type: 'seer_check', targetId: g.id(9) });
     expect(g.state.night!.killTargetId).toBe('p9');
   });
 
@@ -117,14 +181,12 @@ describe('狼人行动', () => {
     g.act(2, { type: 'wolf_pick', targetId: g.id(1), lock: true });
     g.act(3, { type: 'wolf_pick', targetId: g.id(10), lock: true });
     g.act(4, { type: 'wolf_pick', targetId: g.id(10), lock: true });
-    g.act(5, { type: 'seer_check', targetId: g.id(9) });
     expect(g.state.night!.killTargetId).toBe('p10');
 
     const g2 = new Game();
     g2.rng = () => 0;
     for (const s of [1, 2]) g2.act(s, { type: 'wolf_pick', targetId: g2.id(1), lock: true });
     for (const s of [3, 4]) g2.act(s, { type: 'wolf_pick', targetId: g2.id(10), lock: true });
-    g2.act(5, { type: 'seer_check', targetId: g2.id(9) });
     expect(g2.state.night!.killTargetId).toBe('p1');
   });
 
@@ -139,8 +201,11 @@ describe('狼人行动', () => {
 describe('预言家', () => {
   it('每晚只能查验 1 人，只返回好人/狼人', () => {
     const g = new Game();
+    g.wolvesKill(9);
+    g.witchStep();
     g.act(5, { type: 'seer_check', targetId: g.id(6) });
-    expectErr(() => g.act(5, { type: 'seer_check', targetId: g.id(1) }), /已查验/);
+    // 查验后夜晚已进入猎人步骤，再次查验被拒绝
+    expectErr(() => g.act(5, { type: 'seer_check', targetId: g.id(1) }), /已查验|不是你的行动时间/);
     expect(g.state.seerChecks).toEqual([{ night: 1, targetId: 'p6', isWolf: false }]);
     const view = buildView(g.state, g.id(5), g.now);
     expect(view.players.find((p) => p.id === 'p6')!.role).toBeNull();
@@ -148,6 +213,8 @@ describe('预言家', () => {
 
   it('可以查验自己；非预言家不能查验', () => {
     const g = new Game();
+    g.wolvesKill(9);
+    g.witchStep();
     expectErr(() => g.act(9, { type: 'seer_check', targetId: g.id(1) }), /预言家/);
     g.act(5, { type: 'seer_check', targetId: g.id(5) });
     expect(g.state.seerChecks[0].isWolf).toBe(false);
@@ -165,18 +232,18 @@ describe('女巫', () => {
 
   it('女巫不能自救', () => {
     const g = new Game();
-    for (const s of [1, 2, 3, 4]) g.act(s, { type: 'wolf_pick', targetId: g.id(6), lock: true });
-    g.act(5, { type: 'seer_check', targetId: g.id(1) });
+    g.wolvesKill(6);
     expect(buildView(g.state, g.id(6), g.now).me!.witch!.canSave).toBe(false);
     expectErr(() => g.act(6, { type: 'witch', action: 'save' }), /自救/);
   });
 
   it('同一晚不能双药；药剂只能用一次', () => {
     const g = new Game();
-    for (const s of [1, 2, 3, 4]) g.act(s, { type: 'wolf_pick', targetId: g.id(9), lock: true });
-    g.act(5, { type: 'seer_check', targetId: g.id(1) });
+    g.wolvesKill(9);
     g.act(6, { type: 'witch', action: 'poison', targetId: g.id(1) });
     expectErr(() => g.act(6, { type: 'witch', action: 'save' }));
+    g.seerStep(1);
+    g.hunterStep();
     expect(g.state.dawnDeaths.sort()).toEqual(['p1', 'p9']);
     // 第二晚毒药已用完
     g.act(1, { type: 'continue' });
@@ -184,8 +251,7 @@ describe('女巫', () => {
     g.finishSpeeches();
     g.voteAll({}, null);
     expect(g.state.phase).toBe('night');
-    for (const s of [2, 3, 4]) g.act(s, { type: 'wolf_pick', targetId: g.id(10), lock: true });
-    g.act(5, { type: 'seer_check', targetId: g.id(2) });
+    g.wolvesKill(10);
     expectErr(() => g.act(6, { type: 'witch', action: 'poison', targetId: g.id(2) }), /毒药已用完/);
   });
 
@@ -193,8 +259,7 @@ describe('女巫', () => {
     const g = new Game();
     toFirstExileVote(g);
     g.voteAll({}, null); // 全部弃票
-    for (const s of [1, 2, 3, 4]) g.act(s, { type: 'wolf_pick', targetId: g.id(10), lock: true });
-    g.act(5, { type: 'seer_check', targetId: g.id(2) });
+    g.wolvesKill(10);
     const w = buildView(g.state, g.id(6), g.now).me!.witch!;
     expect(w.canAct).toBe(true);
     expect(w.knownKillTargetId).toBeUndefined();
@@ -204,18 +269,20 @@ describe('女巫', () => {
 
   it('同时被刀和被毒只死一次', () => {
     const g = new Game();
-    for (const s of [1, 2, 3, 4]) g.act(s, { type: 'wolf_pick', targetId: g.id(9), lock: true });
-    g.act(5, { type: 'seer_check', targetId: g.id(1) });
+    g.wolvesKill(9);
     g.act(6, { type: 'witch', action: 'poison', targetId: g.id(9) });
+    g.seerStep(1);
+    g.hunterStep();
     expect(g.state.dawnDeaths).toEqual(['p9']);
     expect(g.p(9).deathCause).toBe('poison');
   });
 
-  it('结算结果与提交顺序无关（女巫先于预言家之后都一样）', () => {
+  it('狼人提交顺序不影响结果', () => {
     const a = new Game();
-    a.act(5, { type: 'seer_check', targetId: a.id(1) });
     for (const s of [4, 3, 2, 1]) a.act(s, { type: 'wolf_pick', targetId: a.id(11), lock: true });
-    a.act(6, { type: 'witch', action: 'none' });
+    a.witchStep();
+    a.seerStep(1);
+    a.hunterStep();
     const b = new Game();
     b.night(11, 1);
     expect(a.state.dawnDeaths).toEqual(b.state.dawnDeaths);
@@ -225,13 +292,16 @@ describe('女巫', () => {
     const g = new Game();
     g.p(5).alive = false; // 预言家已死（模拟）
     g.p(6).alive = false; // 女巫已死
-    // 需要重新开始夜晚，伪装计时在夜晚开始时设置
-    g.state.night!.seerFakeUntil = g.now + 5000;
-    for (const s of [1, 2, 3, 4]) g.act(s, { type: 'wolf_pick', targetId: g.id(9), lock: true });
-    expect(g.state.night!.step).toBe('wolf_seer');
-    g.wait(5000);
+    g.rng = () => 0; // 伪装等待取最短
+    g.wolvesKill(9);
     expect(g.state.night!.step).toBe('witch');
-    g.wait(20_000);
+    g.wait(7000);
+    expect(g.state.night!.step).toBe('witch');
+    g.wait(1000);
+    expect(g.state.night!.step).toBe('seer');
+    g.wait(8000);
+    expect(g.state.night!.step).toBe('hunter');
+    g.act(7, { type: 'hunter_ack' });
     expect(g.state.phase).toBe('dawn');
     expect(g.state.dawnDeaths).toEqual(['p9']);
   });

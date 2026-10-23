@@ -120,12 +120,34 @@ export function NightPanel({ view, act }: PanelProps) {
     return <WitchPanel view={view} act={act} offset={0} />;
   }
 
+  if (me.role === 'hunter' && me.hunterNight?.canAck) {
+    const ok = me.hunterNight.canShoot;
+    return (
+      <section className="card night center">
+        <h2>🔫 猎人请睁眼</h2>
+        <div className={`result ${ok ? 'good' : 'bad'}`}>
+          {ok ? '今晚你具备开枪资格' : '今晚你不具备开枪资格（被女巫毒杀）'}
+        </div>
+        <p className="small muted">猎人夜间不主动击杀任何玩家。若你被狼人击杀或白天被放逐，可以开枪带走一人。</p>
+        <div className="actions">
+          <button className="btn primary" onClick={() => act({ type: 'hunter_ack' }).catch(() => undefined)}>我知道了</button>
+        </div>
+      </section>
+    );
+  }
+
   const lastCheck = me.role === 'seer' ? me.seerChecks.find((c) => c.night === view.day) : null;
   return (
     <section className="card night center">
       <div className="moon">🌙</div>
       <h2>天黑请闭眼</h2>
       <p className="muted">第 {view.day} 夜进行中，系统正在等待夜间角色行动。</p>
+      <p className="tiny muted">夜间顺序：狼人 → 女巫 → 预言家 → 猎人状态确认</p>
+      {me.role === 'hunter' && me.hunterNight && (
+        <div className={`result ${me.hunterNight.canShoot ? 'good' : 'bad'}`}>
+          已确认：今晚你{me.hunterNight.canShoot ? '具备' : '不具备'}开枪资格
+        </div>
+      )}
       {lastCheck && (
         <div className={`result ${lastCheck.isWolf ? 'bad' : 'good'}`}>
           今晚查验：{label(view, lastCheck.targetId)} 是 <b>{lastCheck.isWolf ? '狼人' : '好人'}</b>
@@ -144,7 +166,8 @@ export function NightPanel({ view, act }: PanelProps) {
 export function PrivateNotes({ view }: { view: PlayerView }) {
   const me = view.me;
   if (!me?.role) return null;
-  const nightActing = view.phase === 'night' && (me.wolfCanAct || me.seerCanAct || !!me.witch?.canAct || !!me.wolfVotes);
+  const nightActing = view.phase === 'night'
+    && (me.wolfCanAct || me.seerCanAct || !!me.witch?.canAct || !!me.wolfVotes || !!me.hunterNight?.canAck);
   if (nightActing) return null;
   if (me.role === 'werewolf') {
     return <div className="card slim small">🐺 狼队友：{me.teammates.map((id) => label(view, id)).join('、')}</div>;

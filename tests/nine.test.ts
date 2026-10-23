@@ -11,14 +11,16 @@ const expectErr = (fn: () => void, msg?: RegExp) => {
   if (msg) expect(fn).toThrow(msg);
 };
 
-/** 狼人统一刀 kill，预言家查验 check，停在女巫行动前 */
-function toWitchStep(g: Game, kill: number, check = 1) {
-  for (const w of g.state.players.filter((p) => p.alive && p.role === 'werewolf')) {
-    g.act(w.seat, { type: 'wolf_pick', targetId: g.id(kill), lock: true });
-  }
-  const seer = g.state.players.find((p) => p.role === 'seer')!;
-  if (seer.alive) g.act(seer.seat, { type: 'seer_check', targetId: g.id(check) });
+/** 狼人统一刀 kill，停在女巫行动前 */
+function toWitchStep(g: Game, kill: number) {
+  g.wolvesKill(kill);
   expect(g.state.night!.step).toBe('witch');
+}
+
+/** 女巫之后：预言家查验 + 猎人确认，完成夜晚 */
+function finishNight(g: Game, check = 1) {
+  g.seerStep(check);
+  g.hunterStep();
 }
 
 describe('9 人局：房间与发牌', () => {
@@ -62,6 +64,7 @@ describe('9 人局：女巫首晚可以自救', () => {
     expect(w.knownKillTargetId).toBe('p5');
     expect(w.canSave).toBe(true);
     g.act(5, { type: 'witch', action: 'save' });
+    finishNight(g);
     expect(g.state.phase).toBe('dawn');
     expect(g.state.dawnDeaths).toEqual([]);
     expect(g.p(5).alive).toBe(true);
@@ -71,6 +74,7 @@ describe('9 人局：女巫首晚可以自救', () => {
     const g = new Game({ board: 'pnl9' });
     toWitchStep(g, 7);
     g.act(5, { type: 'witch', action: 'none' }); // 首晚不用药，保留解药
+    finishNight(g);
     g.act(1, { type: 'continue' });
     g.skipElection();
     g.finishSpeeches();
@@ -112,8 +116,9 @@ describe('9 人局：屠边胜负', () => {
     const g = new Game({ board: 'pnl9' });
     g.p(1).alive = false;
     g.p(2).alive = false;
-    toWitchStep(g, 7, 3);
+    toWitchStep(g, 7);
     g.act(5, { type: 'witch', action: 'poison', targetId: g.id(3) });
+    finishNight(g, 3);
     expect(g.state.winner).toBe('good');
   });
 });

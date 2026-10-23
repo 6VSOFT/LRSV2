@@ -138,10 +138,26 @@ describe('轮到你提醒', () => {
   });
 });
 
+describe('版本兼容', () => {
+  it('旧版本保存的夜晚（狼人与预言家同时行动）升级后自动转换为新顺序，不会卡住', () => {
+    const g = new Game();
+    const night = g.state.night as any;
+    night.step = 'wolf_seer';
+    delete night.hunterAcked;
+    delete night.fakeUntil;
+    night.seerFakeUntil = null;
+    g.wait(1000);
+    expect(g.state.night!.step).toBe('wolf');
+    g.night(9, 1);
+    expect(g.state.phase).toBe('dawn');
+    expect(g.state.dawnDeaths).toEqual(['p9']);
+  });
+});
+
 describe('API：服务端计时推进', () => {
   afterEach(() => vi.useRealTimers());
 
-  it('预言家和女巫都已出局时，夜晚靠任意玩家轮询按伪装时间自动推进', async () => {
+  it('女巫、预言家、猎人都已出局时，夜晚靠任意玩家轮询按伪装时间逐步推进', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(T0);
     const store = new MemoryStore();
@@ -151,11 +167,10 @@ describe('API：服务端计时推进', () => {
     for (const p of ps) await handleApi('action', { code: host.code, token: p.token, action: { type: 'ready', ready: true } }, store);
     await handleApi('action', { code: host.code, token: host.token, action: { type: 'start' } }, store);
 
-    // 直接修改存储模拟：预言家、女巫都已出局，并重设伪装计时
+    // 直接修改存储模拟：女巫、预言家、猎人都已出局
     const loaded = (await store.get(host.code))!;
     const st = loaded.state;
-    st.players.forEach((p) => { if (p.role === 'seer' || p.role === 'witch') p.alive = false; });
-    st.night!.seerFakeUntil = T0 + 15_000;
+    st.players.forEach((p) => { if (p.role === 'seer' || p.role === 'witch' || p.role === 'hunter') p.alive = false; });
     await store.update(host.code, st, loaded.version);
 
     const byId = (id: string) => ps.find((p: any) => p.playerId === id);
@@ -164,11 +179,15 @@ describe('API：服务端计时推进', () => {
       const r = await handleApi('action', { code: host.code, token: byId(w.id).token, action: { type: 'wolf_pick', targetId: victim.id, lock: true } }, store);
       expect(r.status).toBe(200);
     }
-    expect((await store.get(host.code))!.state.night!.step).toBe('wolf_seer');
-    vi.setSystemTime(T0 + 16_000);
-    await handleApi('state', { code: host.code, token: host.token }, store);
-    expect((await store.get(host.code))!.state.night!.step).toBe('witch');
-    vi.setSystemTime(T0 + 40_000);
+    const stepAt = async (ms: number) => {
+      vi.setSystemTime(T0 + ms);
+      await handleApi('state', { code: host.code, token: host.token }, store);
+      return (await store.get(host.code))!.state;
+    };
+    expect((await stepAt(0)).night!.step).toBe('witch');
+    expect((await stepAt(17_000)).night!.step).toBe('seer');
+    expect((await stepAt(34_000)).night!.step).toBe('hunter');
+    vi.setSystemTime(T0 + 44_000);
     const v = (await handleApi('state', { code: host.code }, store)).body as any;
     expect(v.phase).toBe('dawn');
     expect(v.dawnDeaths).toEqual([victim.id]);

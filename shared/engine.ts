@@ -1,7 +1,7 @@
 // 自动法官核心规则引擎（纯函数式变更 GameState，服务端唯一可信结算）
 import {
-  Board, BoardId, BOARDS, Continuation, DEFAULT_BOARD, DeathCause, Effect, GameState, GOD_ROLES, NightState, Player,
-  ROLE_NAMES, Settings, SpeechPurpose, Team, VoteResult, VoteState,
+  Board, BoardId, BOARDS, Continuation, DEFAULT_BOARD, DeathCause, Effect, GameState, GOD_ROLES, NIGHT_STEPS, NightState,
+  NightStep, Player, Role, ROLE_NAMES, Settings, SpeechPurpose, Team, VoteResult, VoteState,
 } from './types';
 
 export class GameError extends Error {}
@@ -10,8 +10,9 @@ export type Rng = () => number;
 export const OFFLINE_MS = 30_000;
 const PRESENCE_WRITE_MS = 10_000;
 /** 角色已死亡时的伪装等待，避免通过夜晚时长推断身份 */
-const SEER_FAKE_MS: [number, number] = [12_000, 25_000];
-const WITCH_FAKE_MS: [number, number] = [8_000, 16_000];
+const FAKE_STEP_MS: Record<NightStep, [number, number]> = {
+  wolf: [0, 0], witch: [8_000, 16_000], seer: [8_000, 16_000], hunter: [4_000, 9_000],
+};
 
 export type Action =
   | { type: 'ready'; ready: boolean }
@@ -21,6 +22,7 @@ export type Action =
   | { type: 'start' }
   | { type: 'wolf_pick'; targetId: string; lock: boolean }
   | { type: 'seer_check'; targetId: string }
+  | { type: 'hunter_ack' }
   | { type: 'witch'; action: 'save' | 'poison' | 'none'; targetId?: string | null }
   | { type: 'continue' }
   | { type: 'hunter_shoot'; targetId: string | null }
@@ -184,6 +186,7 @@ export function applyAction(state: GameState, actorId: string, action: Action, n
   switch (action.type) {
     case 'wolf_pick': return wolfPick(state, actor, action.targetId, action.lock, now, rng);
     case 'seer_check': return seerCheck(state, actor, action.targetId, now, rng);
+    case 'hunter_ack': return hunterAck(state, actor, now, rng);
     case 'witch': return witchAct(state, actor, action.action, action.targetId ?? null, now, rng);
     case 'continue': return dawnContinue(state, now, rng);
     case 'hunter_shoot': return hunterShoot(state, actor, action.targetId, now, rng);
@@ -209,7 +212,19 @@ export function tick(state: GameState, now: number, rng: Rng): boolean {
 }
 
 function advanceTimers(state: GameState, now: number, rng: Rng) {
-  if (state.phase === 'night') advanceNight(state, now, rng);
+  if (state.phase === 'night') {
+    upgradeLegacyNight(state);
+    advanceNight(state, now, rng);
+  }
+}
+
+/** 兼容旧版本（狼人与预言家同时行动）保存的夜晚数据，升级后进行中的房间不会卡住 */
+function upgradeLegacyNight(state: GameState) {
+  const night = state.night as (NightState & { step: string }) | null;
+  if (!night || (NIGHT_STEPS as string[]).includes(night.step)) return;
+  night.step = night.killTargetId ? 'witch' : 'wolf';
+  night.hunterAcked ??= false;
+  night.fakeUntil ??= null;
 }
 
 // ---------------- 等待室 ----------------
@@ -280,21 +295,20 @@ export function startGame(state: GameState, actor: Player, now: number, rng: Rng
   state.day = 1;
   log(state, now, `游戏开始：${board.name}（${board.summary}），身份已发放`, true);
   for (const p of state.players) log(state, now, `${seatLabel(state, p.id)} 的身份是 ${ROLE_NAMES[p.role!]}`, false);
-  beginNight(state, now, rng);
+  beginNight(state, now);
 }
 
 // ---------------- 夜晚 ----------------
 
-function beginNight(state: GameState, now: number, rng: Rng) {
+function beginNight(state: GameState, now: number) {
   state.speech = null;
   state.vote = null;
   state.sheriffSuggestion = null;
   state.speechDirection = null;
   state.dawnDeaths = [];
   const night: NightState = {
-    step: 'wolf_seer', stepStartedAt: now, wolfVotes: {}, killTargetId: null, seerTargetId: null,
-    seerFakeUntil: aliveWithRole(state, 'seer') ? null : now + randRange(SEER_FAKE_MS, rng),
-    witchDone: false, witchAction: null, witchFakeUntil: null,
+    step: 'wolf', stepStartedAt: now, wolfVotes: {}, killTargetId: null,
+    witchDone: false, witchAction: null, seerTargetId: null, hunterAcked: false, fakeUntil: null,
   };
   state.night = night;
   setPhase(state, 'night', now);
@@ -308,7 +322,7 @@ function requireNight(state: GameState, step: NightState['step']): NightState {
 }
 
 function wolfPick(state: GameState, actor: Player, targetId: string, lock: boolean, now: number, rng: Rng) {
-  const night = requireNight(state, 'wolf_seer');
+  const night = requireNight(state, 'wolf');
   if (actor.role !== 'werewolf' || !actor.alive) fail('只有存活的狼人可以行动');
   const prev = night.wolfVotes[actor.id];
   if (prev?.locked) fail('你的选择已锁定');
@@ -320,7 +334,7 @@ function wolfPick(state: GameState, actor: Player, targetId: string, lock: boole
 }
 
 function seerCheck(state: GameState, actor: Player, targetId: string, now: number, rng: Rng) {
-  const night = requireNight(state, 'wolf_seer');
+  const night = requireNight(state, 'seer');
   if (actor.role !== 'seer' || !actor.alive) fail('只有存活的预言家可以查验');
   if (night.seerTargetId) fail('今晚已查验，结果已锁定');
   const target = mustPlayer(state, targetId);
@@ -372,23 +386,48 @@ function witchAct(state: GameState, actor: Player, type: 'save' | 'poison' | 'no
   advanceNight(state, now, rng);
 }
 
+/** 猎人当晚是否具备开枪资格：被女巫毒杀则不具备 */
+export function hunterCanShootTonight(state: GameState, hunterId: string): boolean {
+  const a = state.night?.witchAction;
+  return !(a?.type === 'poison' && a.targetId === hunterId);
+}
+
+function hunterAck(state: GameState, actor: Player, now: number, rng: Rng) {
+  const night = requireNight(state, 'hunter');
+  if (actor.role !== 'hunter' || !actor.alive) fail('只有存活的猎人可以确认');
+  if (night.hunterAcked) fail('已确认');
+  night.hunterAcked = true;
+  log(state, now, `猎人确认开枪状态：${hunterCanShootTonight(state, actor.id) ? '可以开枪' : '不能开枪（被毒）'}`, false);
+  advanceNight(state, now, rng);
+}
+
+const STEP_ROLE: Record<NightStep, Role> = { wolf: 'werewolf', witch: 'witch', seer: 'seer', hunter: 'hunter' };
+
+function stepDone(state: GameState, night: NightState, now: number): boolean {
+  switch (night.step) {
+    case 'wolf': return state.players.filter((p) => p.alive && p.role === 'werewolf').every((w) => night.wolfVotes[w.id]?.locked);
+    case 'witch': return aliveWithRole(state, 'witch') ? night.witchDone : now >= (night.fakeUntil ?? 0);
+    case 'seer': return aliveWithRole(state, 'seer') ? !!night.seerTargetId : now >= (night.fakeUntil ?? 0);
+    case 'hunter': return aliveWithRole(state, 'hunter') ? night.hunterAcked : now >= (night.fakeUntil ?? 0);
+  }
+}
+
+/** 上一步全部完成后才进入下一步；全部完成后统一结算 */
 function advanceNight(state: GameState, now: number, rng: Rng) {
   const night = state.night;
   if (state.phase !== 'night' || !night) return;
-  if (night.step === 'wolf_seer') {
-    const wolves = state.players.filter((p) => p.alive && p.role === 'werewolf');
-    const wolvesDone = wolves.every((w) => night.wolfVotes[w.id]?.locked);
-    const seerDone = aliveWithRole(state, 'seer') ? !!night.seerTargetId : now >= (night.seerFakeUntil ?? 0);
-    if (!wolvesDone || !seerDone) return;
-    night.killTargetId = tallyWolves(state, night, wolves.map((w) => w.id), rng);
-    log(state, now, `狼人最终刀口：${seatLabel(state, night.killTargetId)}`, false);
-    night.step = 'witch';
+  while (stepDone(state, night, now)) {
+    if (night.step === 'wolf') {
+      const wolves = state.players.filter((p) => p.alive && p.role === 'werewolf');
+      night.killTargetId = tallyWolves(state, night, wolves.map((w) => w.id), rng);
+      log(state, now, `狼人最终刀口：${seatLabel(state, night.killTargetId)}`, false);
+    }
+    const next = NIGHT_STEPS[NIGHT_STEPS.indexOf(night.step) + 1];
+    if (!next) return resolveNight(state, now);
+    night.step = next;
     night.stepStartedAt = now;
-    night.witchFakeUntil = aliveWithRole(state, 'witch') ? null : now + randRange(WITCH_FAKE_MS, rng);
-  }
-  if (night.step === 'witch') {
-    const witchDone = aliveWithRole(state, 'witch') ? night.witchDone : now >= (night.witchFakeUntil ?? 0);
-    if (witchDone) resolveNight(state, now);
+    // 角色已出局或本局不存在：随机等待一段时间再继续
+    night.fakeUntil = aliveWithRole(state, STEP_ROLE[next]) ? null : now + randRange(FAKE_STEP_MS[next], rng);
   }
 }
 
@@ -476,7 +515,7 @@ function runEffects(state: GameState, now: number, rng: Rng) {
     else startDaySpeech(state, now, rng);
   } else if (cont === 'after_exile') {
     state.day += 1;
-    beginNight(state, now, rng);
+    beginNight(state, now);
   }
 }
 

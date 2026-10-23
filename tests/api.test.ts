@@ -99,13 +99,17 @@ describe('API：并发与重复提交', () => {
     ]);
     const wolfRes = await Promise.all(wolfReqs);
     expect(wolfRes.filter((r) => r.status === 200).length).toBe(4);
-    await act(store, byId(seer.id), { type: 'seer_check', targetId: villager.id });
     // 女巫重复提交救人：解药只消耗一次
     const w1 = await Promise.all([
       act(store, byId(witch.id), { type: 'witch', action: 'save' }),
       act(store, byId(witch.id), { type: 'witch', action: 'save' }),
     ]);
     expect(w1.filter((r) => r.status === 200).length).toBe(1);
+    await act(store, byId(seer.id), { type: 'seer_check', targetId: villager.id });
+    // 猎人重复确认，只推进一次
+    const hunter = st.players.find((p) => p.role === 'hunter')!;
+    const h = await Promise.all([1, 2].map(() => act(store, byId(hunter.id), { type: 'hunter_ack' })));
+    expect(h.filter((r) => r.status === 200).length).toBe(1);
     st = await raw(store, ps[0].code);
     expect(st.phase).toBe('dawn');
     expect(st.dawnDeaths).toEqual([]);

@@ -52,20 +52,41 @@ export class Game {
     return this.state.players.filter((p) => p.alive).map((p) => p.seat);
   }
 
-  /** 完成一整晚：狼人统一刀 kill；预言家查验 check；女巫行动 */
+  /** 完成一整晚（狼人 → 女巫 → 预言家 → 猎人）：狼人统一刀 kill；女巫行动；预言家查验 check */
   night(kill: number, check: number, witch: { action: 'save' | 'poison' | 'none'; target?: number } = { action: 'none' }) {
+    this.wolvesKill(kill);
+    this.witchStep(witch);
+    this.seerStep(check);
+    this.hunterStep();
+  }
+
+  roleSeat(role: Role) {
+    return this.state.players.find((p) => p.role === role);
+  }
+
+  wolvesKill(kill: number) {
     for (const w of this.state.players.filter((p) => p.alive && p.role === 'werewolf')) {
       this.act(w.seat, { type: 'wolf_pick', targetId: this.id(kill), lock: true });
     }
-    const seer = this.state.players.find((p) => p.role === 'seer')!;
-    if (seer.alive) this.act(seer.seat, { type: 'seer_check', targetId: this.id(check) });
+  }
+
+  witchStep(witch: { action: 'save' | 'poison' | 'none'; target?: number } = { action: 'none' }) {
+    const w = this.roleSeat('witch');
+    if (w?.alive) this.act(w.seat, { type: 'witch', action: witch.action, targetId: witch.target ? this.id(witch.target) : null });
     else this.wait(30_000);
-    const witchP = this.state.players.find((p) => p.role === 'witch')!;
-    if (witchP.alive) {
-      this.act(witchP.seat, { type: 'witch', action: witch.action, targetId: witch.target ? this.id(witch.target) : null });
-    } else {
-      this.wait(30_000);
-    }
+  }
+
+  seerStep(check: number) {
+    const s = this.roleSeat('seer');
+    if (s?.alive) this.act(s.seat, { type: 'seer_check', targetId: this.id(check) });
+    else this.wait(30_000);
+  }
+
+  hunterStep() {
+    if (this.state.phase !== 'night') return;
+    const h = this.roleSeat('hunter');
+    if (h?.alive) this.act(h.seat, { type: 'hunter_ack' });
+    else this.wait(30_000);
   }
 
   wait(ms: number) {
@@ -129,13 +150,10 @@ export function playRandom(g: Game, rng: () => number) {
     switch (s.phase) {
       case 'night': {
         const n = s.night!;
-        if (n.step === 'wolf_seer') {
-          const wolf = alive.find((p) => p.role === 'werewolf' && !n.wolfVotes[p.id]?.locked);
-          if (wolf) { g.act(wolf.seat, { type: 'wolf_pick', targetId: pick(aliveIds, rng), lock: true }); break; }
-          const seer = alive.find((p) => p.role === 'seer');
-          if (seer && !n.seerTargetId) { g.act(seer.seat, { type: 'seer_check', targetId: pick(aliveIds, rng) }); break; }
-          g.wait(30_000);
-        } else {
+        if (n.step === 'wolf') {
+          const wolf = alive.find((p) => p.role === 'werewolf' && !n.wolfVotes[p.id]?.locked)!;
+          g.act(wolf.seat, { type: 'wolf_pick', targetId: pick(aliveIds, rng), lock: true });
+        } else if (n.step === 'witch') {
           const witch = alive.find((p) => p.role === 'witch');
           if (!witch) { g.wait(30_000); break; }
           const r = rng();
@@ -143,6 +161,14 @@ export function playRandom(g: Game, rng: () => number) {
           if (r < 0.3 && canSave) g.act(witch.seat, { type: 'witch', action: 'save' });
           else if (r < 0.5 && s.witchPotions.poison) g.act(witch.seat, { type: 'witch', action: 'poison', targetId: pick(aliveIds, rng) });
           else g.act(witch.seat, { type: 'witch', action: 'none' });
+        } else if (n.step === 'seer') {
+          const seer = alive.find((p) => p.role === 'seer');
+          if (seer) g.act(seer.seat, { type: 'seer_check', targetId: pick(aliveIds, rng) });
+          else g.wait(30_000);
+        } else {
+          const hunter = alive.find((p) => p.role === 'hunter');
+          if (hunter) g.act(hunter.seat, { type: 'hunter_ack' });
+          else g.wait(30_000);
         }
         break;
       }

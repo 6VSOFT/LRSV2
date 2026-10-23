@@ -1,5 +1,5 @@
 // 按玩家身份裁剪状态：服务端只把该玩家有权知道的信息发给客户端
-import { getBoard, isConnected, witchKnowsKill, witchMaySelfSave } from './engine';
+import { getBoard, hunterCanShootTonight, isConnected, witchKnowsKill, witchMaySelfSave } from './engine';
 import { GameState, PlayerView, PrivateInfo, PublicPlayer } from './types';
 
 export function buildView(state: GameState, viewerId: string | null, now: number): PlayerView {
@@ -76,10 +76,11 @@ function buildPrivate(state: GameState, viewerId: string): PrivateInfo | null {
     playerId: me.id,
     role: me.role,
     teammates: isWolf ? state.players.filter((p) => p.role === 'werewolf' && p.id !== me.id).map((p) => p.id) : [],
-    wolfVotes: isWolf && night?.step === 'wolf_seer' ? night.wolfVotes : null,
+    wolfVotes: isWolf && night?.step === 'wolf' ? night.wolfVotes : null,
     seerChecks: me.role === 'seer' ? state.seerChecks : [],
-    seerCanAct: me.role === 'seer' && me.alive && night?.step === 'wolf_seer' && !night.seerTargetId,
-    wolfCanAct: isWolf && me.alive && night?.step === 'wolf_seer' && !night.wolfVotes[me.id]?.locked,
+    seerCanAct: me.role === 'seer' && me.alive && night?.step === 'seer' && !night.seerTargetId,
+    wolfCanAct: isWolf && me.alive && night?.step === 'wolf' && !night.wolfVotes[me.id]?.locked,
+    hunterNight: null,
     witch: null,
     myBallot: state.vote && viewerId in state.vote.ballots ? state.vote.ballots[viewerId] : undefined,
     canVote: !!state.vote && state.vote.voters.includes(viewerId) && !(viewerId in state.vote.ballots)
@@ -98,11 +99,15 @@ function buildPrivate(state: GameState, viewerId: string): PrivateInfo | null {
       knownKillTargetId: knows ? night!.killTargetId : undefined,
       canSave: witchTurn && !night!.witchDone && state.witchPotions.antidote
         && !!night!.killTargetId && (night!.killTargetId !== me.id || witchMaySelfSave(state)),
-      done: !!night?.witchDone && witchTurn,
+      done: !!night?.witchDone,
     };
   }
 
   if (me.role === 'hunter') {
+    // 猎人状态确认在女巫之后，此时已能确定当晚是否被毒
+    if (night?.step === 'hunter' && me.alive) {
+      info.hunterNight = { canAck: !night.hunterAcked, canShoot: hunterCanShootTonight(state, me.id) };
+    }
     info.hunterDeathCause = me.deathCause;
     info.hunterCanShoot = state.phase === 'hunter' && state.effects[0]?.type === 'hunter' && state.effects[0].playerId === me.id;
   }

@@ -42,6 +42,7 @@ function decide(v, me) {
     case 'night':
       if (me.wolfCanAct) return { type: 'wolf_pick', targetId: pick(alive), lock: true };
       if (me.seerCanAct) return { type: 'seer_check', targetId: pick(alive) };
+      if (me.hunterNight?.canAck) return { type: 'hunter_ack' };
       if (me.witch?.canAct) {
         const r = Math.random();
         if (r < 0.3 && me.witch.canSave) return { type: 'witch', action: 'save' };
