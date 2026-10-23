@@ -96,6 +96,13 @@ export function isConnected(p: Player, now: number) {
 
 export const DEFAULT_SETTINGS: Settings = { idiotFlipSurvives: false, speechSeconds: 120 };
 
+/** 警长发言比其他玩家多 30 秒 */
+export const SHERIFF_BONUS_SECONDS = 30;
+
+export function speechSecondsFor(settings: Settings, sheriffId: string | null, speakerId: string | null | undefined): number {
+  return settings.speechSeconds + (speakerId && speakerId === sheriffId ? SHERIFF_BONUS_SECONDS : 0);
+}
+
 export function newPlayer(id: string, nickname: string, tokenHash: string, seat: number, now: number): Player {
   return {
     id, seat, nickname, tokenHash, ready: false, role: null, alive: true, deathCause: null,

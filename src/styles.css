@@ -178,6 +178,7 @@ input:focus { border-color: var(--primary); }
 
 .speaker { display: flex; align-items: center; justify-content: space-between; background: var(--card2); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; margin: 8px 0 12px; }
 .speaker.mine { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(245, 192, 74, 0.25); }
+.speaker .right { text-align: right; }
 .countdown { font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .countdown.warn { color: var(--gold); }
 .countdown.over { color: var(--red); font-size: 18px; }

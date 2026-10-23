@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { addPlayer, applyAction, createGame, GameError, OFFLINE_MS } from '../shared/engine';
+import {
+  addPlayer, applyAction, createGame, GameError, OFFLINE_MS, SHERIFF_BONUS_SECONDS, speechSecondsFor,
+} from '../shared/engine';
 import { buildView } from '../shared/view';
 import { needsMyPublicAction } from '../src/turn';
 import { handleApi } from '../server/api';
@@ -108,6 +110,16 @@ describe('发言与断线', () => {
     g.act(9, { type: 'continue' });
     expect(g.state.phase).toBe('sheriff_signup');
     expectErr(() => g.act(9, { type: 'sheriff_signup', join: true }), /出局/);
+  });
+});
+
+describe('发言倒计时', () => {
+  it('警长发言比其他玩家多 30 秒', () => {
+    const settings = { idiotFlipSurvives: false, speechSeconds: 120 };
+    expect(speechSecondsFor(settings, 'p3', 'p3')).toBe(150);
+    expect(speechSecondsFor(settings, 'p3', 'p4')).toBe(120);
+    expect(speechSecondsFor(settings, null, 'p4')).toBe(120);
+    expect(speechSecondsFor({ ...settings, speechSeconds: 60 }, 'p3', 'p3')).toBe(60 + SHERIFF_BONUS_SECONDS);
   });
 });
 

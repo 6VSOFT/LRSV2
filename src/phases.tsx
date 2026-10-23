@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Action } from '../shared/engine';
+import { SHERIFF_BONUS_SECONDS, speechSecondsFor, type Action } from '../shared/engine';
 import type { PlayerView, VoteResult } from '../shared/types';
 import { ConfirmButton, Countdown, Locked, RoleImage, SeatBadge, SeatGrid } from './components';
 import { ROLE_INFO } from './lib';
@@ -360,7 +360,10 @@ export function SpeechPanel({ view, act, offset }: PanelProps) {
           <div className="small muted">当前发言</div>
           <div className="big">{label(view, current)}</div>
         </div>
-        <Countdown startedAt={sp.startedAt} seconds={view.settings.speechSeconds} offset={offset} />
+        <div className="right">
+          <Countdown startedAt={sp.startedAt} seconds={speechSecondsFor(view.settings, view.sheriffId, current)} offset={offset} />
+          {current === view.sheriffId && <div className="tiny gold">警长 +{SHERIFF_BONUS_SECONDS} 秒</div>}
+        </div>
       </div>
       <SeatGrid view={view} highlight={[current]} badges={badges} />
       <div className="actions">

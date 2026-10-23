@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import type { Action } from '../shared/engine';
+import { SHERIFF_BONUS_SECONDS, type Action } from '../shared/engine';
 import type { PlayerView } from '../shared/types';
 import { ConfirmButton, RoleCard, RoleImage, SeatGrid } from './components';
 import { useTurnAlert, useWakeLock } from './turn';
@@ -373,7 +373,7 @@ function Lobby({ view, act, code }: { view: PlayerView; act: (a: Action) => Prom
             )}
           </li>
           <li>
-            发言倒计时 {view.settings.speechSeconds} 秒（仅提示）
+            发言倒计时 {view.settings.speechSeconds} 秒，警长 {view.settings.speechSeconds + SHERIFF_BONUS_SECONDS} 秒（仅提示）
             {isCreator && [60, 90, 120, 180].map((s) => (
               <button key={s} className={`chip ${view.settings.speechSeconds === s ? 'on' : ''}`} onClick={() => act({ type: 'settings', settings: { speechSeconds: s } }).catch(() => undefined)}>{s}s</button>
             ))}
