@@ -1,6 +1,8 @@
 // 测试工具：向房间加入 N 个机器人玩家，并按各自视图随机执行合法操作。
 // 用法：node scripts/bots.mjs <房间代码> [机器人数量=填满剩余座位] [服务器地址=http://localhost:5180]
 // 机器人只能通过公开 API 拿到自己的视图，与真实手机玩家完全一样。
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+
 const [code, countArg, baseArg] = process.argv.slice(2);
 if (!code) {
   console.error('用法：node scripts/bots.mjs <房间代码> [数量] [地址]');
@@ -19,19 +21,30 @@ async function post(route, body) {
   return data;
 }
 
+// 机器人令牌保存在 .bots/<房间代码>.json，脚本重启后可以接管同一批机器人（不会重复占座）
+const SAVE_DIR = new URL('../.bots/', import.meta.url);
+const SAVE_FILE = new URL(`${code.toUpperCase()}.json`, SAVE_DIR);
+mkdirSync(SAVE_DIR, { recursive: true });
+
 const room = await post('state', { code });
-const COUNT = countArg && countArg !== 'auto' ? Number(countArg) : room.board.size - room.players.length;
+let bots = [];
+if (existsSync(SAVE_FILE)) {
+  const saved = JSON.parse(readFileSync(SAVE_FILE, 'utf8'));
+  bots = saved.filter((b) => room.players.some((p) => p.id === b.playerId));
+  if (bots.length) console.log(`接管已有的 ${bots.length} 个机器人`);
+}
+const COUNT = countArg && countArg !== 'auto' ? Number(countArg) - bots.length : room.board.size - room.players.length;
 console.log(`${room.board.name}，当前 ${room.players.length}/${room.board.size} 人`);
-const bots = [];
 for (let i = 0; i < COUNT; i++) {
   try {
-    bots.push(await post('join', { code, nickname: `机器人${i + 1}` }));
+    bots.push(await post('join', { code, nickname: `机器人${bots.length + 1}` }));
   } catch (e) {
     console.log('加入失败：', e.message);
     break;
   }
 }
-console.log(`已加入 ${bots.length} 个机器人`);
+writeFileSync(SAVE_FILE, JSON.stringify(bots, null, 2));
+console.log(`共 ${bots.length} 个机器人`);
 
 function decide(v, me) {
   const alive = v.players.filter((p) => p.alive).map((p) => p.id);
@@ -69,11 +82,15 @@ function decide(v, me) {
   }
 }
 
+// 游戏结束后默认继续等待：房主点「再来一局」后机器人会自动重新准备。设置 BOT_ONCE=1 则结束后退出。
+let announced = false;
 for (;;) {
   let ended = false;
+  let present = 0;
   for (const b of bots) {
     try {
       const v = await post('state', { code, token: b.token });
+      if (v.me) present++;
       if (v.status === 'ended') { ended = true; continue; }
       if (!v.me) continue;
       const a = decide(v, v.me);
@@ -86,10 +103,16 @@ for (;;) {
       if (!/锁定|不可操作|不是你|还没轮到|已投票|已做出/.test(e.message)) console.log('操作失败：', e.message);
     }
   }
-  if (ended) {
-    const v = await post('state', { code, token: bots[0].token });
-    console.log('游戏结束：', v.winReason);
+  if (present === 0) {
+    console.log('机器人都已不在房间中，退出');
     break;
   }
-  await sleep(400);
+  if (ended && !announced) {
+    const v = await post('state', { code, token: bots[0].token });
+    console.log('游戏结束：', v.winReason, process.env.BOT_ONCE ? '' : '（等待房主「再来一局」）');
+    announced = true;
+    if (process.env.BOT_ONCE) break;
+  }
+  if (!ended) announced = false;
+  await sleep(ended ? 2000 : 400);
 }

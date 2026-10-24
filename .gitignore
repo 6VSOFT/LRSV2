@@ -6,4 +6,5 @@ dev-dist/
 .env.*
 *.log
 scratch-*
+.bots/
 .DS_Store
