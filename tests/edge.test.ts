@@ -114,6 +114,12 @@ describe('发言与断线', () => {
 });
 
 describe('发言倒计时', () => {
+  it('新房间默认 90 秒，警长 120 秒', () => {
+    const s = createGame('R', { id: 'a1', nickname: '甲', tokenHash: 'x' }, T0);
+    expect(s.settings.speechSeconds).toBe(90);
+    expect(speechSecondsFor(s.settings, 'a1', 'a1')).toBe(120);
+  });
+
   it('警长发言比其他玩家多 30 秒', () => {
     const settings = { idiotFlipSurvives: false, speechSeconds: 120 };
     expect(speechSecondsFor(settings, 'p3', 'p3')).toBe(150);

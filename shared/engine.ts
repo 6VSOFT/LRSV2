@@ -96,7 +96,7 @@ export function isConnected(p: Player, now: number) {
 
 // ---------------- 房间 ----------------
 
-export const DEFAULT_SETTINGS: Settings = { idiotFlipSurvives: false, speechSeconds: 120 };
+export const DEFAULT_SETTINGS: Settings = { idiotFlipSurvives: false, speechSeconds: 90 };
 
 /** 警长发言比其他玩家多 30 秒 */
 export const SHERIFF_BONUS_SECONDS = 30;
