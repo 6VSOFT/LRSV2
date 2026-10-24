@@ -32,6 +32,7 @@ export type Action =
   | { type: 'badge'; targetId: string | null }
   | { type: 'exile_confirm' }
   | { type: 'restart' }
+  | { type: 'dissolve' }
   | { type: 'sheriff_signup'; join: boolean }
   | { type: 'sheriff_withdraw' }
   | { type: 'speech_done' }
@@ -147,6 +148,7 @@ export function validateNickname(raw: string): string {
 }
 
 export function addPlayer(state: GameState, p: { id: string; nickname: string; tokenHash: string }, now: number): Player {
+  if (state.dissolved) fail(ROOM_DISSOLVED);
   if (state.status !== 'lobby') fail('游戏已开始，无法加入');
   const size = getBoard(state).size;
   if (state.players.length >= size) fail(`房间已满（${size} 人）`);
@@ -173,8 +175,10 @@ export function touch(state: GameState, playerId: string, now: number): boolean 
 // ---------------- 动作入口 ----------------
 
 export function applyAction(state: GameState, actorId: string, action: Action, now: number, rng: Rng): void {
+  if (state.dissolved) fail(ROOM_DISSOLVED);
   const actor = mustPlayer(state, actorId);
   actor.lastSeen = now;
+  if (action.type === 'dissolve') return dissolveRoom(state, actor, now);
   if (action.type === 'restart') return restartGame(state, actor, now);
   if (state.status === 'ended') fail('游戏已结束');
 
@@ -211,7 +215,7 @@ export function applyAction(state: GameState, actorId: string, action: Action, n
 
 /** 处理时间驱动的推进（夜间伪装等待），返回是否有变化 */
 export function tick(state: GameState, now: number, rng: Rng): boolean {
-  if (state.status !== 'playing') return false;
+  if (state.status !== 'playing' || state.dissolved) return false;
   const before = state.phase + (state.night?.step ?? '');
   advanceTimers(state, now, rng);
   return before !== state.phase + (state.night?.step ?? '');
@@ -269,6 +273,15 @@ function lobbyAction(state: GameState, actor: Player, action: Action, now: numbe
     default:
       fail('游戏尚未开始');
   }
+}
+
+export const ROOM_DISSOLVED = '房间已解散';
+
+/** 房主随时可以解散房间（等待中、游戏中、结束后均可）；解散后房间不可再使用 */
+function dissolveRoom(state: GameState, actor: Player, now: number) {
+  if (actor.id !== state.creatorId) fail('只有房主可以解散房间');
+  state.dissolved = true;
+  log(state, now, `房主 ${seatLabel(state, actor.id)} 解散了房间`, true);
 }
 
 /** 游戏结束后由房主把同一房间重置为等待室，保留玩家与座位，清空身份与记录 */

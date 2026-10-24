@@ -257,6 +257,8 @@ export interface GameState {
   code: string;
   /** 旧房间数据没有此字段时按 12 人局处理 */
   board?: BoardId;
+  /** 房主已解散房间：之后所有请求都返回「房间已解散」 */
+  dissolved?: boolean;
   createdAt: number;
   creatorId: string;
   settings: Settings;

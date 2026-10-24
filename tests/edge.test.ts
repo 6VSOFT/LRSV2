@@ -323,3 +323,30 @@ describe('API：服务端计时推进', () => {
     expect((await handleApi('create', { nickname: '一二三四五六七八九十一二三' }, store)).status).toBe(400);
   });
 });
+
+describe('解散房间', () => {
+  it('只有房主能解散；解散后任何操作、加入、查询都返回「房间已解散」', async () => {
+    const store = new MemoryStore();
+    const host = (await handleApi('create', { nickname: '房主' }, store)).body as any;
+    const guest = (await handleApi('join', { code: host.code, nickname: '客人' }, store)).body as any;
+    const notHost = await handleApi('action', { code: host.code, token: guest.token, action: { type: 'dissolve' } }, store);
+    expect(notHost.status).toBe(400);
+    expect((notHost.body as any).error).toMatch(/房主/);
+    expect((await handleApi('action', { code: host.code, token: host.token, action: { type: 'dissolve' } }, store)).status).toBe(200);
+    for (const r of [
+      await handleApi('state', { code: host.code, token: guest.token }, store),
+      await handleApi('join', { code: host.code, nickname: '新人' }, store),
+      await handleApi('action', { code: host.code, token: host.token, action: { type: 'ready', ready: true } }, store),
+    ]) {
+      expect(r.status).toBe(400);
+      expect((r.body as any).error).toBe('房间已解散');
+    }
+  });
+
+  it('游戏进行中房主也可以解散', () => {
+    const g = new Game();
+    g.act(1, { type: 'dissolve' });
+    expect(g.state.dissolved).toBe(true);
+    expect(() => g.act(1, { type: 'wolf_pick', targetId: g.id(9), lock: true })).toThrow(/房间已解散/);
+  });
+});

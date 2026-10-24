@@ -1,6 +1,6 @@
 // 与运行环境无关的 API 处理器：Netlify Function 与本地 Vite 开发服务器共用
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { Action, addPlayer, applyAction, createGame, GameError, parseBoardId, Rng, tick, touch } from '../shared/engine';
+import { Action, addPlayer, applyAction, createGame, GameError, parseBoardId, Rng, ROOM_DISSOLVED, tick, touch } from '../shared/engine';
 import { GameState, Player } from '../shared/types';
 import { buildView } from '../shared/view';
 import { getRoomStore, RoomStore } from './store';
@@ -80,6 +80,7 @@ export async function handleApi(route: string, body: any, store: RoomStore = get
         const token = randomBytes(24).toString('hex');
         const result = await mutate(store, code, (state, now) => {
           // 同一设备已在房间中 → 直接恢复原座位，不占用新座位
+          if (state.dissolved) throw new GameError(ROOM_DISSOLVED);
           const existing = findByToken(state, body.token);
           if (existing) return { changed: false, result: { code, token: body.token as string, playerId: existing.id } };
           const playerId = randomBytes(6).toString('hex');
@@ -92,6 +93,7 @@ export async function handleApi(route: string, body: any, store: RoomStore = get
       case 'state': {
         const code = normCode(body.code);
         const view = await mutate(store, code, (state, now) => {
+          if (state.dissolved) throw new GameError(ROOM_DISSOLVED);
           const me = findByToken(state, body.token);
           const changedTick = tick(state, now, secureRng);
           const changedPresence = me ? touch(state, me.id, now) : false;

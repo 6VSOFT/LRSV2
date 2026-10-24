@@ -183,7 +183,7 @@ function useRoom(code: string) {
         setSession(null);
       }
     } catch (e) {
-      if (e instanceof ApiError && e.message === '房间不存在') setError('房间不存在');
+      if (e instanceof ApiError && (e.message === '房间不存在' || e.message === '房间已解散')) setError(e.message);
       else setOffline(true);
     }
   }, [code, session, accept]);
@@ -211,7 +211,7 @@ function useRoom(code: string) {
     const n = ++seq.current;
     try {
       accept(await api.action(session, a), n);
-      setError('');
+      setError(a.type === 'dissolve' ? '房间已解散' : '');
     } catch (e) {
       setError(e instanceof Error ? e.message : '操作失败');
       refresh();
@@ -227,10 +227,13 @@ function RoomPage({ code }: { code: string }) {
   const myTurn = useTurnAlert(view);
   useWakeLock(view?.status === 'playing');
 
-  if (error === '房间不存在') {
+  if (error === '房间不存在' || error === '房间已解散') {
     return (
       <main className="page">
-        <section className="card center"><h2>房间 {code} 不存在</h2><button className="btn primary" onClick={() => go('/')}>返回首页</button></section>
+        <section className="card center">
+          <h2>{error === '房间已解散' ? `房间 ${code} 已被房主解散` : `房间 ${code} 不存在`}</h2>
+          <button className="btn primary" onClick={() => { clearSession(code); go('/'); }}>返回首页</button>
+        </section>
       </main>
     );
   }
@@ -297,6 +300,18 @@ function RoomPage({ code }: { code: string }) {
             </div>
           )}
         </>
+      )}
+      {me?.isCreator && (
+        <div className="actions dissolve">
+          <ConfirmButton
+            tone="danger"
+            label="解散房间"
+            confirmText={view.status === 'playing'
+              ? '确认解散房间？本局游戏将立即结束，所有玩家都会被移出房间，且无法恢复。'
+              : '确认解散房间？所有玩家都会被移出房间，且无法恢复。'}
+            onConfirm={() => act({ type: 'dissolve' })}
+          />
+        </div>
       )}
     </main>
   );
