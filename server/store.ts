@@ -52,13 +52,25 @@ export class BlobsStore implements RoomStore {
   async create(code: string, state: GameState) {
     const store = await this.storePromise;
     const r = await store.setJSON(code, state, { onlyIfNew: true });
-    return r.modified;
+    return this.confirmWrite(code, state, r);
   }
 
   async update(code: string, state: GameState, version: string) {
     const store = await this.storePromise;
     const r = await store.setJSON(code, state, { onlyIfMatch: version });
-    return r.modified;
+    return this.confirmWrite(code, state, r);
+  }
+
+  /**
+   * @netlify/blobs 的条件写入对 412 以外的任何状态（例如并发时的 429 限流、5xx）都会报告 modified: true，
+   * 但真正写入成功时一定返回新的 etag。没有 etag 时读回比对，确认数据确实写入，否则按冲突处理并重试。
+   */
+  private async confirmWrite(code: string, state: GameState, r: { modified: boolean; etag?: string }) {
+    if (!r.modified) return false;
+    if (r.etag) return true;
+    const store = await this.storePromise;
+    const current = await store.get(code, { type: 'json', consistency: 'strong' });
+    return JSON.stringify(current) === JSON.stringify(state);
   }
 }
 
