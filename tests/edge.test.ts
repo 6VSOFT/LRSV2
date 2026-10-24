@@ -350,3 +350,27 @@ describe('解散房间', () => {
     expect(() => g.act(1, { type: 'wolf_pick', targetId: g.id(9), lock: true })).toThrow(/房间已解散/);
   });
 });
+
+describe('12 人预女猎白（蒸汽朋克）', () => {
+  it('规则与 12 人预女猎白一致，只有插画风格不同', async () => {
+    const { BOARDS } = await import('../shared/types');
+    const { std12, std12sp } = BOARDS;
+    expect(std12sp.roles).toEqual(std12.roles);
+    expect(std12sp.size).toBe(12);
+    expect(std12sp.witchSelfSaveFirstNight).toBe(std12.witchSelfSaveFirstNight);
+    expect(std12sp.art).toBe('steampunk');
+    const store = new MemoryStore();
+    const r = await handleApi('create', { nickname: '房主', board: 'std12sp' }, store);
+    expect((await store.get((r.body as any).code))!.state.board).toBe('std12sp');
+  });
+
+  it('完整对局正常进行（白痴放逐自动翻牌）', () => {
+    const g = new Game({ board: 'std12sp' });
+    g.night(9, 1);
+    g.dawn();
+    g.act(1, { type: 'continue' });
+    g.finishSpeeches();
+    g.voteAll({}, 8);
+    expect(g.p(8).revealed).toBe(true);
+  });
+});

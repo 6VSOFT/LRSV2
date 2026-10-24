@@ -1,10 +1,16 @@
-import { ReactNode, useEffect, useState } from 'react';
+import { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 import type { PlayerView, PublicPlayer, Role } from '../shared/types';
 import { ROLE_INFO } from './lib';
 import { copyText } from './record';
 
-export function RoleImage({ role, size = 120 }: { role: Role | 'back'; size?: number }) {
-  const src = role === 'back' ? '/roles/card-back.jpg' : `/roles/${role}.jpg`;
+/** 当前板子的插画风格（房间页按 view.board.art 提供） */
+export const ArtContext = createContext<string | undefined>(undefined);
+
+export function RoleImage({ role, size = 120, art }: { role: Role | 'back'; size?: number; art?: string }) {
+  const ctx = useContext(ArtContext);
+  const style = art ?? ctx;
+  const dir = style ? `/roles/${style}` : '/roles';
+  const src = role === 'back' ? `${dir}/card-back.jpg` : `${dir}/${role}.jpg`;
   return <img className="role-img" src={src} width={size} height={Math.round(size * 1.5)} loading="lazy" decoding="async" alt={role === 'back' ? '身份牌背面' : ROLE_INFO[role].name} />;
 }
 

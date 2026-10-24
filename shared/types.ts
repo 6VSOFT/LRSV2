@@ -58,7 +58,7 @@ export const WOLF_BEAUTY_KNIGHT_12: Role[] = [
   'villager', 'villager', 'villager', 'villager',
 ];
 
-export type BoardId = 'std12' | 'pnl9' | 'wkg12' | 'wbk12';
+export type BoardId = 'std12' | 'std12sp' | 'pnl9' | 'wkg12' | 'wbk12';
 
 export interface Board {
   id: BoardId;
@@ -71,6 +71,8 @@ export interface Board {
   witchSelfSaveFirstNight: boolean;
   /** 首页与等待室展示的特殊规则 */
   notes?: string[];
+  /** 角色插画风格：public/roles/<art>/ 下的同名图片；不填使用默认插画 */
+  art?: string;
 }
 
 export const BOARDS: Record<BoardId, Board> = {
@@ -78,6 +80,13 @@ export const BOARDS: Record<BoardId, Board> = {
     id: 'std12', name: '12 人预女猎白', size: 12, roles: STANDARD_12,
     summary: '4 狼人 · 预言家 · 女巫 · 猎人 · 白痴 · 4 村民',
     witchSelfSaveFirstNight: false,
+  },
+  std12sp: {
+    id: 'std12sp', name: '12 人预女猎白（蒸汽朋克）', size: 12, roles: STANDARD_12,
+    summary: '4 狼人 · 预言家 · 女巫 · 猎人 · 白痴 · 4 村民',
+    witchSelfSaveFirstNight: false,
+    notes: ['规则与 12 人预女猎白相同，蒸汽朋克风格插画'],
+    art: 'steampunk',
   },
   pnl9: {
     id: 'pnl9', name: '9 人预女猎', size: 9, roles: STANDARD_9,
@@ -99,7 +108,7 @@ export const BOARDS: Record<BoardId, Board> = {
 };
 
 /** 首页展示顺序 */
-export const BOARD_ORDER: BoardId[] = ['std12', 'pnl9', 'wkg12', 'wbk12'];
+export const BOARD_ORDER: BoardId[] = ['std12', 'std12sp', 'pnl9', 'wkg12', 'wbk12'];
 
 export const DEFAULT_BOARD: BoardId = 'std12';
 

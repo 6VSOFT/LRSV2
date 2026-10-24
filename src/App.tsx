@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { SHERIFF_BONUS_SECONDS, type Action } from '../shared/engine';
 import { type Board, type BoardId, BOARD_ORDER, BOARDS, DEFAULT_BOARD, isWolfRole, type PlayerView, ROLE_NAMES } from '../shared/types';
-import { ConfirmButton, CopyButton, RoleCard, RoleImage, SeatGrid } from './components';
+import { ArtContext, ConfirmButton, CopyButton, RoleCard, RoleImage, SeatGrid } from './components';
 import { useTurnAlert, useWakeLock } from './turn';
 import { buildRecordText } from './record';
 import { api, ApiError, clearSession, loadSession, PHASE_TITLE, rememberNickname, saveSession, Session } from './lib';
@@ -84,7 +84,7 @@ function Home() {
       <div className="board-list" role="radiogroup" aria-label="选择板子">
         {BOARD_ORDER.map((id) => <BoardOption key={id} board={BOARDS[id]} selected={board === id} onSelect={() => setBoard(id)} />)}
       </div>
-      {Array.from({ length: 4 }, (_, i) => (
+      {Array.from({ length: 3 }, (_, i) => (
         <section key={i} className="card coming-soon" aria-disabled="true">
           <span className="coming-icon">🔒</span>
           <span>新板子即将上线</span>
@@ -103,7 +103,7 @@ function BoardOption({ board, selected, onSelect }: { board: Board; selected: bo
         <span className={`board-check ${selected ? 'on' : ''}`}>{selected ? '✓ 已选择' : '选择'}</span>
       </div>
       <div className="roles-strip">
-        {roleTypes.map((r) => <RoleImage key={r} role={r} size={42} />)}
+        {roleTypes.map((r) => <RoleImage key={r} role={r} size={42} art={board.art ?? ''} />)}
       </div>
       <div className="tiny muted">{board.summary} ｜ 屠边规则</div>
       <div className="tiny gold">{[board.witchSelfSaveFirstNight ? '女巫仅首晚可以自救' : '女巫全程不可自救', ...(board.notes ?? [])].join(' · ')}</div>
@@ -244,89 +244,91 @@ function RoomPage({ code }: { code: string }) {
   const me = view.players.find((p) => p.id === view.me?.playerId);
   const aliveCount = view.players.filter((p) => p.alive).length;
   return (
-    <main className="page">
-      <header className="topbar">
-        <button className="link" onClick={() => go('/')}>‹</button>
-        <div className="center">
-          <div className="phase-title">{PHASE_TITLE[view.phase]}</div>
-          <div className="tiny muted">房间 {view.code}{view.status !== 'lobby' && ` · 第 ${view.day} ${view.phase === 'night' ? '夜' : '天'} · 存活 ${aliveCount}/${view.board.size}`}</div>
-        </div>
-        <div className="me-chip">{me ? `${me.seat}号` : ''}{me && !me.alive ? '·出局' : ''}</div>
-      </header>
-      {offline && <div className="banner warn">网络连接中断，正在重连…</div>}
-      {myTurn && <div className="banner turn">👉 轮到你操作了</div>}
-      {error && <div className="banner error" onClick={() => setError('')}>{error}（点击关闭）</div>}
+    <ArtContext.Provider value={view.board.art}>
+      <main className="page">
+        <header className="topbar">
+          <button className="link" onClick={() => go('/')}>‹</button>
+          <div className="center">
+            <div className="phase-title">{PHASE_TITLE[view.phase]}</div>
+            <div className="tiny muted">房间 {view.code}{view.status !== 'lobby' && ` · 第 ${view.day} ${view.phase === 'night' ? '夜' : '天'} · 存活 ${aliveCount}/${view.board.size}`}</div>
+          </div>
+          <div className="me-chip">{me ? `${me.seat}号` : ''}{me && !me.alive ? '·出局' : ''}</div>
+        </header>
+        {offline && <div className="banner warn">网络连接中断，正在重连…</div>}
+        {myTurn && <div className="banner turn">👉 轮到你操作了</div>}
+        {error && <div className="banner error" onClick={() => setError('')}>{error}（点击关闭）</div>}
 
-      {view.status === 'lobby' ? (
-        <Lobby view={view} act={act} code={code} />
-      ) : (
-        <>
-          {view.me?.role && view.status === 'playing' && (
-            <RoleCard
-              role={view.me.role}
-              extra={isWolfRole(view.me.role) && (
-                <div className="teammates">
-                  🐺 狼队友：{view.me.teammates.length
-                    ? view.me.teammates.map((id) => {
-                      const p = view.players.find((x) => x.id === id)!;
-                      return <span key={id} className={`tag red ${p.alive ? '' : 'gone'}`}>{p.seat}号{view.me!.teammateRoles[id] ? `·${ROLE_NAMES[view.me!.teammateRoles[id]]}` : ''}{p.alive ? '' : '·出局'}</span>;
-                    })
-                    : '无'}
-                </div>
-              )}
+        {view.status === 'lobby' ? (
+          <Lobby view={view} act={act} code={code} />
+        ) : (
+          <>
+            {view.me?.role && view.status === 'playing' && (
+              <RoleCard
+                role={view.me.role}
+                extra={isWolfRole(view.me.role) && (
+                  <div className="teammates">
+                    🐺 狼队友：{view.me.teammates.length
+                      ? view.me.teammates.map((id) => {
+                        const p = view.players.find((x) => x.id === id)!;
+                        return <span key={id} className={`tag red ${p.alive ? '' : 'gone'}`}>{p.seat}号{view.me!.teammateRoles[id] ? `·${ROLE_NAMES[view.me!.teammateRoles[id]]}` : ''}{p.alive ? '' : '·出局'}</span>;
+                      })
+                      : '无'}
+                  </div>
+                )}
+              />
+            )}
+            {view.status === 'playing' && <NightOrder view={view} />}
+            {view.status === 'playing' && <PrivateNotes view={view} />}
+            <PhasePanel view={view} act={act} offset={offset} />
+            {view.status === 'playing' && view.phase !== 'night' && !['sheriff_vote', 'exile_vote'].includes(view.phase) && view.voteResults.length > 0
+              && view.voteResults.at(-1)!.day === view.day && (
+              <section className="card"><h3>最近投票结果</h3><VoteResultCard view={view} result={view.voteResults.at(-1)!} /></section>
+            )}
+            {view.status === 'playing' && !['day_speech', 'sheriff_speech', 'exile_pk_speech', 'sheriff_vote', 'exile_vote', 'hunter', 'badge', 'sheriff_suggest'].includes(view.phase) && view.phase !== 'night' && (
+              <section className="card"><h3>玩家状态</h3><SeatGrid view={view} /></section>
+            )}
+            <GameLog view={view} />
+            {view.status === 'ended' && (
+              <div className="actions">
+                {me?.isCreator ? (
+                  <ConfirmButton
+                    label="再来一局（同一房间）"
+                    confirmText="确认开始新一局？所有玩家回到等待室并重新准备，本局结果将被清空。"
+                    onConfirm={() => act({ type: 'restart' })}
+                  />
+                ) : (
+                  <p className="small muted center">房主可以在同一房间开始新一局，你无需重新加入。</p>
+                )}
+                <button className="btn ghost" onClick={() => go('/')}>返回首页</button>
+              </div>
+            )}
+          </>
+        )}
+        {/* 等待室有自己的「离开房间」（会让出座位）；结束页已有「返回首页」 */}
+        {view.status === 'playing' && (
+          <div className="actions">
+            <ConfirmButton
+              tone="ghost"
+              label="离开房间"
+              confirmText="确认离开房间？游戏仍在进行，你的座位和身份会保留（按断线处理，其他人可以跳过你的发言）。之后用同一台设备打开房间链接即可回到原座位。"
+              onConfirm={() => go('/')}
             />
-          )}
-          {view.status === 'playing' && <NightOrder view={view} />}
-          {view.status === 'playing' && <PrivateNotes view={view} />}
-          <PhasePanel view={view} act={act} offset={offset} />
-          {view.status === 'playing' && view.phase !== 'night' && !['sheriff_vote', 'exile_vote'].includes(view.phase) && view.voteResults.length > 0
-            && view.voteResults.at(-1)!.day === view.day && (
-            <section className="card"><h3>最近投票结果</h3><VoteResultCard view={view} result={view.voteResults.at(-1)!} /></section>
-          )}
-          {view.status === 'playing' && !['day_speech', 'sheriff_speech', 'exile_pk_speech', 'sheriff_vote', 'exile_vote', 'hunter', 'badge', 'sheriff_suggest'].includes(view.phase) && view.phase !== 'night' && (
-            <section className="card"><h3>玩家状态</h3><SeatGrid view={view} /></section>
-          )}
-          <GameLog view={view} />
-          {view.status === 'ended' && (
-            <div className="actions">
-              {me?.isCreator ? (
-                <ConfirmButton
-                  label="再来一局（同一房间）"
-                  confirmText="确认开始新一局？所有玩家回到等待室并重新准备，本局结果将被清空。"
-                  onConfirm={() => act({ type: 'restart' })}
-                />
-              ) : (
-                <p className="small muted center">房主可以在同一房间开始新一局，你无需重新加入。</p>
-              )}
-              <button className="btn ghost" onClick={() => go('/')}>返回首页</button>
-            </div>
-          )}
-        </>
-      )}
-      {/* 等待室有自己的「离开房间」（会让出座位）；结束页已有「返回首页」 */}
-      {view.status === 'playing' && (
-        <div className="actions">
-          <ConfirmButton
-            tone="ghost"
-            label="离开房间"
-            confirmText="确认离开房间？游戏仍在进行，你的座位和身份会保留（按断线处理，其他人可以跳过你的发言）。之后用同一台设备打开房间链接即可回到原座位。"
-            onConfirm={() => go('/')}
-          />
-        </div>
-      )}
-      {me?.isCreator && (
-        <div className="actions dissolve">
-          <ConfirmButton
-            tone="danger"
-            label="解散房间"
-            confirmText={view.status === 'playing'
-              ? '确认解散房间？本局游戏将立即结束，所有玩家都会被移出房间，且无法恢复。'
-              : '确认解散房间？所有玩家都会被移出房间，且无法恢复。'}
-            onConfirm={() => act({ type: 'dissolve' })}
-          />
-        </div>
-      )}
-    </main>
+          </div>
+        )}
+        {me?.isCreator && (
+          <div className="actions dissolve">
+            <ConfirmButton
+              tone="danger"
+              label="解散房间"
+              confirmText={view.status === 'playing'
+                ? '确认解散房间？本局游戏将立即结束，所有玩家都会被移出房间，且无法恢复。'
+                : '确认解散房间？所有玩家都会被移出房间，且无法恢复。'}
+              onConfirm={() => act({ type: 'dissolve' })}
+            />
+          </div>
+        )}
+      </main>
+    </ArtContext.Provider>
   );
 }
 
