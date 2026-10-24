@@ -1,12 +1,12 @@
 // 测试工具：向房间加入 N 个机器人玩家，并按各自视图随机执行合法操作。
-// 用法：node scripts/bots.mjs <房间代码> [机器人数量=填满剩余座位] [服务器地址=http://localhost:5173]
+// 用法：node scripts/bots.mjs <房间代码> [机器人数量=填满剩余座位] [服务器地址=http://localhost:5180]
 // 机器人只能通过公开 API 拿到自己的视图，与真实手机玩家完全一样。
 const [code, countArg, baseArg] = process.argv.slice(2);
 if (!code) {
   console.error('用法：node scripts/bots.mjs <房间代码> [数量] [地址]');
   process.exit(1);
 }
-const BASE = baseArg ?? 'http://localhost:5173';
+const BASE = baseArg ?? 'http://localhost:5180';
 const DELAY = Number(process.env.BOT_DELAY ?? 700);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

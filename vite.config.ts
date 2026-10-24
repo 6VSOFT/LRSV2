@@ -62,5 +62,6 @@ export default defineConfig({
       },
     }),
   ],
-  server: { host: true, port: 5173 },
+  // 5173 常被其他本地程序占用，固定使用 5180，端口被占用时直接报错而不是悄悄换端口
+  server: { host: true, port: 5180, strictPort: true },
 });
