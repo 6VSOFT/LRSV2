@@ -84,7 +84,7 @@ function Home() {
       <div className="board-list" role="radiogroup" aria-label="选择板子">
         {BOARD_ORDER.map((id) => <BoardOption key={id} board={BOARDS[id]} selected={board === id} onSelect={() => setBoard(id)} />)}
       </div>
-      {Array.from({ length: 3 }, (_, i) => (
+      {Array.from({ length: 4 }, (_, i) => (
         <section key={i} className="card coming-soon" aria-disabled="true">
           <span className="coming-icon">🔒</span>
           <span>新板子即将上线</span>
