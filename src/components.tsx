@@ -4,8 +4,8 @@ import { ROLE_INFO } from './lib';
 import { copyText } from './record';
 
 export function RoleImage({ role, size = 120 }: { role: Role | 'back'; size?: number }) {
-  const src = role === 'back' ? '/roles/card-back.svg' : `/roles/${role}.svg`;
-  return <img className="role-img" src={src} width={size} height={Math.round(size * 1.3)} alt={role === 'back' ? '身份牌背面' : ROLE_INFO[role].name} />;
+  const src = role === 'back' ? '/roles/card-back.jpg' : `/roles/${role}.jpg`;
+  return <img className="role-img" src={src} width={size} height={Math.round(size * 1.5)} loading="lazy" decoding="async" alt={role === 'back' ? '身份牌背面' : ROLE_INFO[role].name} />;
 }
 
 export function RoleCard({ role, extra }: { role: Role; extra?: ReactNode }) {

@@ -37,7 +37,7 @@ export default defineConfig({
     devApi(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['roles/*.svg', 'icons/*.png'],
+      includeAssets: ['roles/*.svg', 'roles/*.jpg', 'icons/*.png'],
       manifest: {
         name: '狼人杀自动法官',
         short_name: '狼人杀法官',
@@ -58,7 +58,7 @@ export default defineConfig({
       workbox: {
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//],
-        globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,jpg,webmanifest}'],
       },
     }),
   ],
