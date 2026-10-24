@@ -22,6 +22,13 @@ export const SEAT_ROLES_WKG: Role[] = [
   'villager', 'villager', 'villager', 'villager',
 ];
 
+/** 狼美人骑士局默认座位身份：1 狼美人，2-4 狼，5 预言家，6 女巫，7 骑士，8 守卫，9-12 村民 */
+export const SEAT_ROLES_WBK: Role[] = [
+  'wolf_beauty', 'werewolf', 'werewolf', 'werewolf',
+  'seer', 'witch', 'knight', 'guard',
+  'villager', 'villager', 'villager', 'villager',
+];
+
 export const T0 = 1_000_000;
 
 export class Game {
@@ -38,7 +45,7 @@ export class Game {
     for (let i = 1; i <= size; i++) this.act(i, { type: 'ready', ready: true });
     this.act(1, { type: 'start' });
     // 固定身份，便于测试
-    const roles = board === 'pnl9' ? SEAT_ROLES_9 : board === 'wkg12' ? SEAT_ROLES_WKG : SEAT_ROLES;
+    const roles = board === 'pnl9' ? SEAT_ROLES_9 : board === 'wkg12' ? SEAT_ROLES_WKG : board === 'wbk12' ? SEAT_ROLES_WBK : SEAT_ROLES;
     this.state.players.forEach((p, i) => (p.role = roles[i]));
   }
 
@@ -87,7 +94,17 @@ export class Game {
     }
   }
 
+  /** 狼美人魅惑（target 为 null 表示不魅惑）；狼美人已出局则等待伪装时间 */
+  charmStep(target: number | null = null) {
+    if (this.state.night?.step !== 'charm') return;
+    const b = this.roleSeat('wolf_beauty');
+    if (b?.alive) this.act(b.seat, { type: 'charm', targetId: target == null ? null : this.id(target) });
+    else this.wait(30_000);
+  }
+
+  /** 若当前是狼美人魅惑步骤，先让狼美人不魅惑 */
   witchStep(witch: { action: 'save' | 'poison' | 'none'; target?: number } = { action: 'none' }) {
+    this.charmStep(null);
     const w = this.roleSeat('witch');
     if (w?.alive) this.act(w.seat, { type: 'witch', action: witch.action, targetId: witch.target ? this.id(witch.target) : null });
     else this.wait(30_000);
@@ -180,7 +197,13 @@ export function playRandom(g: Game, rng: () => number) {
           g.act(guard.seat, { type: 'guard', targetId: rng() < 0.8 ? pick(options, rng) : null });
         } else if (n.step === 'wolf') {
           const wolf = alive.find((p) => isWolfRole(p.role) && !n.wolfVotes[p.id]?.locked)!;
-          g.act(wolf.seat, { type: 'wolf_pick', targetId: pick(aliveIds, rng), lock: true });
+          const targets = alive.filter((p) => p.role !== 'wolf_beauty').map((p) => p.id);
+          g.act(wolf.seat, { type: 'wolf_pick', targetId: pick(targets, rng), lock: true });
+        } else if (n.step === 'charm') {
+          const beauty = alive.find((p) => p.role === 'wolf_beauty');
+          if (!beauty) { g.wait(30_000); break; }
+          const options = aliveIds.filter((id) => id !== s.charmTargetId && id !== beauty.id);
+          g.act(beauty.seat, { type: 'charm', targetId: rng() < 0.85 && options.length ? pick(options, rng) : null });
         } else if (n.step === 'witch') {
           const witch = alive.find((p) => p.role === 'witch');
           if (!witch) { g.wait(30_000); break; }
@@ -220,6 +243,11 @@ export function playRandom(g: Game, rng: () => number) {
         break;
       }
       case 'sheriff_speech': case 'day_speech': case 'exile_pk_speech': {
+        const knight = alive.find((p) => p.role === 'knight');
+        if (s.phase === 'day_speech' && knight && !s.knightDuelUsed && rng() < 0.15) {
+          g.act(knight.seat, { type: 'duel', targetId: pick(aliveIds.filter((id) => id !== knight.id), rng) });
+          break;
+        }
         const cur = s.speech!.order[s.speech!.index];
         const el = s.election;
         if (s.speech!.purpose === 'sheriff' && el && rng() < 0.1) {

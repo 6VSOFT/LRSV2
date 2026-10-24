@@ -1,7 +1,7 @@
 import type { NightRecord, PlayerView, VoteResult } from '../shared/types';
 import { ROLE_INFO } from './lib';
 
-const CAUSE: Record<string, string> = { wolf: '被狼刀', poison: '被毒杀', exile: '被放逐', hunter: '被猎人带走', wolf_king: '被狼王带走' };
+const CAUSE: Record<string, string> = { wolf: '被狼刀', poison: '被毒杀', exile: '被放逐', hunter: '被猎人带走', wolf_king: '被狼王带走', charm: '殉情', duel: '骑士决斗' };
 
 /**
  * 生成可复制的纯文本游戏记录：游戏结束后包含全部身份与夜间记录，进行中只包含公开信息。
@@ -35,6 +35,10 @@ export function buildRecordText(view: PlayerView, { includeLog = true }: { inclu
       if (view.board.roles.includes('guard')) {
         lines.push('', '【守卫守护】');
         for (const r of records) lines.push(`第 ${r.night} 夜：${guardLine(r, seat)}`);
+      }
+      if (view.board.roles.includes('wolf_beauty')) {
+        lines.push('', '【狼美人魅惑】');
+        for (const r of records) lines.push(`第 ${r.night} 夜：${!r.charm ? '狼美人已出局' : r.charm.targetId ? `魅惑 ${seat(r.charm.targetId)}` : '不魅惑'}`);
       }
       if (view.board.roles.includes('witch')) {
         lines.push('', '【女巫用药】');

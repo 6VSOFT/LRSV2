@@ -76,9 +76,11 @@ export const api = {
 
 export const ROLE_INFO: Record<Role, { name: string; team: string; desc: string; color: string }> = {
   werewolf: { name: '狼人', team: '狼人阵营', color: '#e5484d', desc: '每晚与狼队友共同选择击杀一名玩家（可自刀）。屠神或屠民即获胜。' },
+  wolf_beauty: { name: '狼美人', team: '狼人阵营 · 狼美人', color: '#ff5fa2', desc: '夜间与狼队友一起刀人（狼人不能刀狼美人），狼人行动后单独魅惑一名玩家，不能连续两晚魅惑同一人。狼美人出局时被魅惑者立即殉情（无遗言）；被骑士决斗出局时魅惑不生效。' },
   wolf_king: { name: '狼王', team: '狼人阵营 · 狼王', color: '#ff6b5e', desc: '夜间与狼队友一起刀人。被放逐、被狼刀（自刀）或被猎人带走时可开枪带走一名玩家；被女巫毒杀不能开枪。' },
   seer: { name: '预言家', team: '好人阵营 · 神职', color: '#8e7cff', desc: '每晚查验一名玩家，得知其是好人还是狼人。' },
   witch: { name: '女巫', team: '好人阵营 · 神职', color: '#3dd68c', desc: '一瓶解药、一瓶毒药，每晚最多用一瓶。9 人局仅首晚可自救，其他板子不能自救。用过解药后不再得知刀口。' },
+  knight: { name: '骑士', team: '好人阵营 · 神职', color: '#d9a84a', desc: '白天发言阶段（投票前）可随时翻牌，与一名玩家决斗，整局一次。对方是狼人则其立即出局，跳过当天投票直接入夜；对方是好人则骑士出局，发言继续。' },
   guard: { name: '守卫', team: '好人阵营 · 神职', color: '#5b9cff', desc: '每晚守护一名玩家（可以守自己或空守）免受狼刀，不能连续两晚守同一人。与女巫解药救同一人时效果抵消，该玩家仍然死亡（同守同救）。' },
   hunter: { name: '猎人', team: '好人阵营 · 神职', color: '#f5a524', desc: '出局时可开枪带走一名玩家；被女巫毒杀不能开枪。' },
   idiot: { name: '白痴', team: '好人阵营 · 神职', color: '#2ec8d6', desc: '白天被放逐时系统自动翻牌，公布白痴身份。' },

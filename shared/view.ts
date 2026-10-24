@@ -76,13 +76,17 @@ function buildPrivate(state: GameState, viewerId: string): PrivateInfo | null {
     playerId: me.id,
     role: me.role,
     teammates: isWolf ? state.players.filter((p) => isWolfRole(p.role) && p.id !== me.id).map((p) => p.id) : [],
-    wolfKingId: isWolf ? state.players.find((p) => p.role === 'wolf_king' && p.id !== me.id)?.id ?? null : null,
+    teammateRoles: isWolf ? Object.fromEntries(state.players
+      .filter((p) => p.id !== me.id && (p.role === 'wolf_king' || p.role === 'wolf_beauty'))
+      .map((p) => [p.id, p.role!])) : {},
     wolfVotes: isWolf && night?.step === 'wolf' ? night.wolfVotes : null,
     seerChecks: me.role === 'seer' ? state.seerChecks : [],
     seerCanAct: me.role === 'seer' && me.alive && night?.step === 'seer' && !night.seerTargetId,
     wolfCanAct: isWolf && me.alive && night?.step === 'wolf' && !night.wolfVotes[me.id]?.locked,
     hunterNight: null,
     guard: null,
+    charm: null,
+    knight: null,
     witch: null,
     myBallot: state.vote && viewerId in state.vote.ballots ? state.vote.ballots[viewerId] : undefined,
     canVote: !!state.vote && state.vote.voters.includes(viewerId) && !(viewerId in state.vote.ballots)
@@ -113,6 +117,21 @@ function buildPrivate(state: GameState, viewerId: string): PrivateInfo | null {
       // 今晚已守护的目标（仅夜间给守卫本人看）
       targetId: night?.guardDone ? night.guardTargetId ?? null : undefined,
     };
+  }
+
+  if (me.role === 'wolf_beauty') {
+    const charmTurn = !!night && night.step === 'charm' && me.alive;
+    info.charm = {
+      canAct: charmTurn && !night!.charmDone,
+      lastTargetId: state.charmTargetId ?? null,
+      targetId: night?.charmDone ? night.charmTargetId ?? null : undefined,
+      current: state.charmTargetId ?? null,
+    };
+  }
+
+  if (me.role === 'knight') {
+    const used = !!state.knightDuelUsed;
+    info.knight = { used, canDuel: !used && me.alive && state.phase === 'day_speech' };
   }
 
   if (me.role === 'hunter' && night?.step === 'hunter' && me.alive) {

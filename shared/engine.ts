@@ -11,7 +11,7 @@ export const OFFLINE_MS = 30_000;
 const PRESENCE_WRITE_MS = 10_000;
 /** 角色已死亡时的伪装等待，避免通过夜晚时长推断身份 */
 const FAKE_STEP_MS: Record<NightStep, [number, number]> = {
-  guard: [6_000, 12_000], wolf: [0, 0], witch: [8_000, 16_000], seer: [8_000, 16_000], hunter: [4_000, 9_000],
+  guard: [6_000, 12_000], wolf: [0, 0], charm: [5_000, 10_000], witch: [8_000, 16_000], seer: [8_000, 16_000], hunter: [4_000, 9_000],
 };
 
 export type Action =
@@ -23,6 +23,8 @@ export type Action =
   | { type: 'wolf_pick'; targetId: string; lock: boolean }
   | { type: 'seer_check'; targetId: string }
   | { type: 'guard'; targetId: string | null }
+  | { type: 'charm'; targetId: string | null }
+  | { type: 'duel'; targetId: string }
   | { type: 'hunter_ack' }
   | { type: 'witch'; action: 'save' | 'poison' | 'none'; targetId?: string | null }
   | { type: 'continue' }
@@ -131,7 +133,7 @@ export function createGame(
     status: 'lobby', phase: 'lobby', phaseStartedAt: now, day: 0,
     players: [newPlayer(creator.id, validateNickname(creator.nickname), creator.tokenHash, 1, now)],
     sheriffId: null, electionDone: false, sheriffSuggestion: null,
-    witchPotions: { antidote: true, poison: true }, lastGuardTargetId: null, night: null, seerChecks: [], nightRecords: [], dawnDeaths: [], pendingNightDeaths: null,
+    witchPotions: { antidote: true, poison: true }, lastGuardTargetId: null, charmTargetId: null, knightDuelUsed: false, night: null, seerChecks: [], nightRecords: [], dawnDeaths: [], pendingNightDeaths: null,
     election: null, speech: null, speechDirection: null, vote: null, voteResults: [],
     exiledPendingId: null, effects: [], continuation: null, winner: null, winReason: null, log: [],
   };
@@ -188,6 +190,8 @@ export function applyAction(state: GameState, actorId: string, action: Action, n
     case 'wolf_pick': return wolfPick(state, actor, action.targetId, action.lock, now, rng);
     case 'seer_check': return seerCheck(state, actor, action.targetId, now, rng);
     case 'guard': return guardAct(state, actor, action.targetId ?? null, now, rng);
+    case 'charm': return charmAct(state, actor, action.targetId ?? null, now, rng);
+    case 'duel': return knightDuel(state, actor, action.targetId, now, rng);
     case 'hunter_ack': return hunterAck(state, actor, now, rng);
     case 'witch': return witchAct(state, actor, action.action, action.targetId ?? null, now, rng);
     case 'continue': return dawnContinue(state, now, rng);
@@ -276,7 +280,7 @@ function restartGame(state: GameState, actor: Player, now: number) {
   }
   Object.assign(state, {
     status: 'lobby', day: 0, sheriffId: null, electionDone: false, sheriffSuggestion: null,
-    witchPotions: { antidote: true, poison: true }, lastGuardTargetId: null, night: null, seerChecks: [], nightRecords: [], dawnDeaths: [], pendingNightDeaths: null,
+    witchPotions: { antidote: true, poison: true }, lastGuardTargetId: null, charmTargetId: null, knightDuelUsed: false, night: null, seerChecks: [], nightRecords: [], dawnDeaths: [], pendingNightDeaths: null,
     election: null, speech: null, speechDirection: null, vote: null, voteResults: [],
     exiledPendingId: null, effects: [], continuation: null, winner: null, winReason: null, log: [],
   } satisfies Partial<GameState>);
@@ -302,7 +306,9 @@ export function startGame(state: GameState, actor: Player, now: number, rng: Rng
 
 // ---------------- 夜晚 ----------------
 
-const STEP_ROLE: Record<NightStep, Role> = { guard: 'guard', wolf: 'werewolf', witch: 'witch', seer: 'seer', hunter: 'hunter' };
+const STEP_ROLE: Record<NightStep, Role> = {
+  guard: 'guard', wolf: 'werewolf', charm: 'wolf_beauty', witch: 'witch', seer: 'seer', hunter: 'hunter',
+};
 
 /** 本板子的夜间步骤：板子里没有的角色整步跳过（不需要伪装等待，因为人人都知道本局没有该角色） */
 export function nightSteps(state: Pick<GameState, 'board'>): NightStep[] {
@@ -327,7 +333,7 @@ function beginNight(state: GameState, now: number, rng: Rng) {
   const night: NightState = {
     step: 'wolf', stepStartedAt: now, wolfVotes: {}, killTargetId: null,
     witchDone: false, witchAction: null, seerTargetId: null, hunterAcked: false, fakeUntil: null,
-    guardTargetId: null, guardDone: false,
+    guardTargetId: null, guardDone: false, charmTargetId: null, charmDone: false,
   };
   state.night = night;
   setPhase(state, 'night', now);
@@ -348,6 +354,7 @@ function wolfPick(state: GameState, actor: Player, targetId: string, lock: boole
   if (prev?.locked) fail('你的选择已锁定');
   const target = mustPlayer(state, targetId);
   if (!target.alive) fail('不能选择已出局的玩家');
+  if (target.role === 'wolf_beauty') fail('狼美人不能被自刀');
   night.wolfVotes[actor.id] = { targetId: target.id, locked: !!lock };
   if (lock) log(state, now, `狼人 ${seatLabel(state, actor.id)} 锁定击杀 ${seatLabel(state, target.id)}`, false);
   advanceNight(state, now, rng);
@@ -381,6 +388,25 @@ function guardAct(state: GameState, actor: Player, targetId: string | null, now:
     log(state, now, '守卫今晚空守', false);
   }
   night.guardDone = true;
+  advanceNight(state, now, rng);
+}
+
+function charmAct(state: GameState, actor: Player, targetId: string | null, now: number, rng: Rng) {
+  const night = requireNight(state, 'charm');
+  if (actor.role !== 'wolf_beauty' || !actor.alive) fail('只有存活的狼美人可以魅惑');
+  if (night.charmDone) fail('今晚已魅惑，操作已锁定');
+  if (targetId != null) {
+    const target = mustPlayer(state, targetId);
+    if (!target.alive) fail('不能魅惑已出局的玩家');
+    if (target.id === actor.id) fail('不能魅惑自己');
+    if (target.id === state.charmTargetId) fail('不能连续两晚魅惑同一名玩家');
+    night.charmTargetId = target.id;
+    log(state, now, `狼美人魅惑 ${seatLabel(state, target.id)}`, false);
+  } else {
+    night.charmTargetId = null;
+    log(state, now, '狼美人今晚不魅惑', false);
+  }
+  night.charmDone = true;
   advanceNight(state, now, rng);
 }
 
@@ -442,6 +468,7 @@ function hunterAck(state: GameState, actor: Player, now: number, rng: Rng) {
 function stepDone(state: GameState, night: NightState, now: number): boolean {
   switch (night.step) {
     case 'guard': return aliveWithRole(state, 'guard') ? !!night.guardDone : now >= (night.fakeUntil ?? 0);
+    case 'charm': return aliveWithRole(state, 'wolf_beauty') ? !!night.charmDone : now >= (night.fakeUntil ?? 0);
     case 'wolf': return state.players.filter((p) => p.alive && isWolfRole(p.role)).every((w) => night.wolfVotes[w.id]?.locked);
     case 'witch': return aliveWithRole(state, 'witch') ? night.witchDone : now >= (night.fakeUntil ?? 0);
     case 'seer': return aliveWithRole(state, 'seer') ? !!night.seerTargetId : now >= (night.fakeUntil ?? 0);
@@ -488,6 +515,8 @@ function resolveNight(state: GameState, now: number) {
   if (kill && saved === guarded) deaths.set(kill, 'wolf');
   if (kill && saved && guarded) log(state, now, `${seatLabel(state, kill)} 同时被守护和解救（同守同救），仍然出局`, false);
   if (getBoard(state).roles.includes('guard')) state.lastGuardTargetId = night.guardTargetId ?? null;
+  // 今晚的魅惑立即生效（狼美人今晚出局时，被魅惑者一同殉情）
+  if (aliveWithRole(state, 'wolf_beauty')) state.charmTargetId = night.charmTargetId ?? null;
   // 毒药独立结算；同时被刀与被毒只死一次，按毒杀处理（猎人不能开枪）
   if (night.witchAction?.type === 'poison' && night.witchAction.targetId) deaths.set(night.witchAction.targetId, 'poison');
 
@@ -510,6 +539,7 @@ function recordNight(state: GameState, night: NightState) {
   const witch = aliveWithRole(state, 'witch');
   const hunter = aliveWithRole(state, 'hunter');
   const guard = aliveWithRole(state, 'guard');
+  const beauty = aliveWithRole(state, 'wolf_beauty');
   (state.nightRecords ??= []).push({
     night: state.day,
     wolfVotes: bySeat(state, wolves.map((w) => w.id))
@@ -519,6 +549,7 @@ function recordNight(state: GameState, night: NightState) {
     witch: witch ? night.witchAction ?? { type: 'none', targetId: null } : null,
     hunter: hunter ? { hunterId: hunter.id, canShoot: hunterCanShootTonight(state, hunter.id) } : null,
     ...(getBoard(state).roles.includes('guard') ? { guard: guard ? { guardId: guard.id, targetId: night.guardTargetId ?? null } : null } : {}),
+    ...(getBoard(state).roles.includes('wolf_beauty') ? { charm: beauty ? { beautyId: beauty.id, targetId: night.charmTargetId ?? null } : null } : {}),
   });
 }
 
@@ -543,7 +574,10 @@ function dawnContinue(state: GameState, now: number, rng: Rng) {
 
 // ---------------- 死亡与连锁效果 ----------------
 
-/** 标记死亡并返回需要处理的后续效果（猎人/狼王开枪 → 警徽移交）；被毒杀不能开枪 */
+/**
+ * 标记死亡并返回需要处理的后续效果（猎人/狼王开枪 → 警徽移交）；被毒杀不能开枪。
+ * 狼美人出局（被骑士决斗除外）时，被魅惑者殉情，追加到 list 末尾（调用方据此公布死讯）。
+ */
 function killPlayers(state: GameState, list: { id: string; cause: DeathCause }[], now: number): Effect[] {
   const hunters: Effect[] = [];
   const badges: Effect[] = [];
@@ -554,14 +588,19 @@ function killPlayers(state: GameState, list: { id: string; cause: DeathCause }[]
     p.deathCause = cause;
     p.deathDay = state.day;
     log(state, now, `${seatLabel(state, id)} 出局（${causeText(cause)}）`, false);
-    if (isShooterRole(p.role) && cause !== 'poison') hunters.push({ type: 'hunter', playerId: id });
+    if (p.role === 'wolf_beauty' && cause !== 'duel' && state.charmTargetId) {
+      const lover = mustPlayer(state, state.charmTargetId);
+      state.charmTargetId = null;
+      if (lover.alive && !list.some((d) => d.id === lover.id)) list.push({ id: lover.id, cause: 'charm' });
+    }
+    if (isShooterRole(p.role) && cause !== 'poison' && cause !== 'charm') hunters.push({ type: 'hunter', playerId: id });
     if (state.sheriffId === id) badges.push({ type: 'badge', playerId: id });
   }
   return [...hunters, ...badges];
 }
 
 export function causeText(c: DeathCause) {
-  return { wolf: '被狼人击杀', poison: '被女巫毒杀', exile: '被投票放逐', hunter: '被猎人带走', wolf_king: '被狼王带走' }[c];
+  return { wolf: '被狼人击杀', poison: '被女巫毒杀', exile: '被投票放逐', hunter: '被猎人带走', wolf_king: '被狼王带走', charm: '被狼美人魅惑，殉情', duel: '骑士决斗' }[c];
 }
 
 function runEffects(state: GameState, now: number, rng: Rng) {
@@ -587,6 +626,9 @@ function runEffects(state: GameState, now: number, rng: Rng) {
   } else if (cont === 'after_exile') {
     state.day += 1;
     beginNight(state, now, rng);
+  } else if (cont === 'resume_speech' && state.speech) {
+    setPhase(state, 'day_speech', now);
+    skipIneligible(state, now, rng);
   }
 }
 
@@ -612,7 +654,9 @@ function hunterShoot(state: GameState, actor: Player, targetId: string | null, n
     fail('只能选择其他存活玩家');
   }
   log(state, now, `${name} ${seatLabel(state, actor.id)} 开枪带走了 ${seatLabel(state, target.id)}`, true);
-  const more = killPlayers(state, [{ id: target.id, cause: actor.role === 'wolf_king' ? 'wolf_king' : 'hunter' }], now);
+  const shot = [{ id: target.id, cause: (actor.role === 'wolf_king' ? 'wolf_king' : 'hunter') as DeathCause }];
+  const more = killPlayers(state, shot, now);
+  logLovers(state, shot, now);
   if (checkWin(state, now)) return;
   state.effects.unshift(...more);
   runEffects(state, now, rng);
@@ -630,6 +674,41 @@ function badgeAct(state: GameState, actor: Player, targetId: string | null, now:
     log(state, now, `警长 ${seatLabel(state, actor.id)} 将警徽移交给 ${seatLabel(state, target.id)}`, true);
   }
   state.effects.shift();
+  runEffects(state, now, rng);
+}
+
+/** 公布殉情出局的玩家（狼美人被放逐、被枪杀时） */
+function logLovers(state: GameState, list: { id: string; cause: DeathCause }[], now: number) {
+  for (const d of list) if (d.cause === 'charm') log(state, now, `${seatLabel(state, d.id)} 被狼美人魅惑，殉情出局（无遗言）`, true);
+}
+
+// ---------------- 骑士决斗 ----------------
+
+/** 骑士在白天发言阶段（投票前）翻牌决斗：目标是狼则狼出局并直接入夜；目标是好人则骑士出局，发言继续 */
+function knightDuel(state: GameState, actor: Player, targetId: string, now: number, rng: Rng) {
+  if (state.phase !== 'day_speech' || !state.speech) fail('只能在白天发言阶段发起决斗');
+  if (actor.role !== 'knight' || !actor.alive) fail('只有存活的骑士可以决斗');
+  if (state.knightDuelUsed) fail('决斗技能已经使用过');
+  const target = mustPlayer(state, targetId);
+  if (!target.alive || target.id === actor.id) fail('只能选择其他存活玩家');
+  state.knightDuelUsed = true;
+  actor.revealed = true;
+  log(state, now, `${seatLabel(state, actor.id)} 翻牌：骑士，向 ${seatLabel(state, target.id)} 发起决斗`, true);
+  if (isWolfRole(target.role)) {
+    target.revealed = true;
+    log(state, now, `决斗成功：${seatLabel(state, target.id)} 是${ROLE_NAMES[target.role!]}，立即出局。跳过今天的投票，直接入夜`, true);
+    state.speech = null;
+    const effects = killPlayers(state, [{ id: target.id, cause: 'duel' }], now);
+    if (checkWin(state, now)) return;
+    state.effects = effects;
+    state.continuation = 'after_exile';
+  } else {
+    log(state, now, `决斗失败：${seatLabel(state, target.id)} 是好人，骑士 ${seatLabel(state, actor.id)} 出局。发言继续`, true);
+    const effects = killPlayers(state, [{ id: actor.id, cause: 'duel' }], now);
+    if (checkWin(state, now)) return;
+    state.effects = effects;
+    state.continuation = 'resume_speech';
+  }
   runEffects(state, now, rng);
 }
 
@@ -971,7 +1050,9 @@ function finishExile(state: GameState, id: string | null, now: number, rng: Rng)
   state.speech = null;
   let effects: Effect[] = [];
   if (id) {
-    effects = killPlayers(state, [{ id, cause: 'exile' }], now);
+    const list: { id: string; cause: DeathCause }[] = [{ id, cause: 'exile' }];
+    effects = killPlayers(state, list, now);
+    logLovers(state, list, now);
     if (checkWin(state, now)) return;
   }
   state.effects = effects;

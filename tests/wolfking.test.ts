@@ -54,10 +54,10 @@ describe('狼王守卫：房间与发牌', () => {
     const g = wkg();
     const v = buildView(g.state, g.id(2), g.now).me!;
     expect(v.teammates.sort()).toEqual(['p1', 'p3', 'p4']);
-    expect(v.wolfKingId).toBe('p1');
-    expect(buildView(g.state, g.id(1), g.now).me!.wolfKingId).toBeNull();
+    expect(v.teammateRoles).toEqual({ p1: 'wolf_king' });
+    expect(buildView(g.state, g.id(1), g.now).me!.teammateRoles).toEqual({});
     // 好人看不到任何狼队友信息
-    expect(buildView(g.state, g.id(9), g.now).me!.wolfKingId).toBeNull();
+    expect(buildView(g.state, g.id(9), g.now).me!.teammateRoles).toEqual({});
     g.guardStep(null);
     expect(buildView(g.state, g.id(1), g.now).me!.wolfCanAct).toBe(true);
   });

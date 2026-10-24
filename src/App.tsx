@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { SHERIFF_BONUS_SECONDS, type Action } from '../shared/engine';
-import { type Board, type BoardId, BOARD_ORDER, BOARDS, DEFAULT_BOARD, isWolfRole, type PlayerView } from '../shared/types';
+import { type Board, type BoardId, BOARD_ORDER, BOARDS, DEFAULT_BOARD, isWolfRole, type PlayerView, ROLE_NAMES } from '../shared/types';
 import { ConfirmButton, CopyButton, RoleCard, RoleImage, SeatGrid } from './components';
 import { useTurnAlert, useWakeLock } from './turn';
 import { buildRecordText } from './record';
@@ -61,7 +61,7 @@ function Home() {
       <header className="hero">
         <img src="/roles/icon.svg" width={88} height={88} alt="" className="hero-icon" />
         <h1>狼人杀自动法官</h1>
-        <p className="muted">预女猎白 12 人 · 预女猎 9 人 · 狼王守卫 12 人 · 无需真人法官 · 无需身份牌</p>
+        <p className="muted">预女猎白 · 预女猎 · 狼王守卫 · 狼美人骑士 · 无需真人法官 · 无需身份牌</p>
       </header>
       <section className="card">
         <label className="field">
@@ -83,7 +83,7 @@ function Home() {
       <div className="board-list" role="radiogroup" aria-label="选择板子">
         {BOARD_ORDER.map((id) => <BoardOption key={id} board={BOARDS[id]} selected={board === id} onSelect={() => setBoard(id)} />)}
       </div>
-      {Array.from({ length: 4 }, (_, i) => (
+      {Array.from({ length: 3 }, (_, i) => (
         <section key={i} className="card coming-soon" aria-disabled="true">
           <span className="coming-icon">🔒</span>
           <span>新板子即将上线</span>
@@ -265,7 +265,7 @@ function RoomPage({ code }: { code: string }) {
                   🐺 狼队友：{view.me.teammates.length
                     ? view.me.teammates.map((id) => {
                       const p = view.players.find((x) => x.id === id)!;
-                      return <span key={id} className={`tag red ${p.alive ? '' : 'gone'}`}>{p.seat}号{id === view.me!.wolfKingId ? '·狼王' : ''}{p.alive ? '' : '·出局'}</span>;
+                      return <span key={id} className={`tag red ${p.alive ? '' : 'gone'}`}>{p.seat}号{view.me!.teammateRoles[id] ? `·${ROLE_NAMES[view.me!.teammateRoles[id]]}` : ''}{p.alive ? '' : '·出局'}</span>;
                     })
                     : '无'}
                 </div>
@@ -412,7 +412,11 @@ function Lobby({ view, act, code }: { view: PlayerView; act: (a: Action) => Prom
           <li>{view.board.name}：{view.board.summary}，屠边胜负。</li>
           <li>女巫{view.board.witchSelfSaveFirstNight ? '仅首晚可以自救' : '不可自救'}，同一晚不能双药；用过解药后不再得知刀口。</li>
           {view.board.roles.includes('guard') && <li>守卫每晚守护一人（可自守、可空守），不能连续两晚守同一人；同守同救则该玩家仍然死亡。</li>}
-          <li>猎人{view.board.roles.includes('wolf_king') ? '、狼王' : ''}出局时可开枪带走一人，被女巫毒杀不能开枪。</li>
+          {view.board.roles.some((r) => r === 'hunter' || r === 'wolf_king') && (
+            <li>{['hunter', 'wolf_king'].filter((r) => view.board.roles.includes(r as never)).map((r) => ROLE_NAMES[r as 'hunter']).join('、')}出局时可开枪带走一人，被女巫毒杀不能开枪。</li>
+          )}
+          {view.board.roles.includes('wolf_beauty') && <li>狼美人每晚在狼人之后魅惑一人（不能连魅，狼人不能刀狼美人）；狼美人出局时被魅惑者殉情，被骑士决斗出局时不殉情。</li>}
+          {view.board.roles.includes('knight') && <li>骑士在白天发言阶段可随时决斗一次：对方是狼则其出局并直接入夜，对方是好人则骑士出局。</li>}
           <li>首日竞选警长；警长归票时 1.5 票。</li>
           {hasIdiot && <li>
             白痴被放逐时自动翻牌：{view.settings.idiotFlipSurvives ? '翻牌免死，但失去投票权（经典规则）' : '公布身份后仍然出局（本项目默认）'}

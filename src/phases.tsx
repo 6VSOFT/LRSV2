@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { SHERIFF_BONUS_SECONDS, speechSecondsFor, type Action } from '../shared/engine';
+import { nightSteps, SHERIFF_BONUS_SECONDS, speechSecondsFor, type Action } from '../shared/engine';
 import { isWolfRole, ROLE_NAMES, type NightRecord, type PlayerView, type VoteResult } from '../shared/types';
 import { ConfirmButton, CopyButton, Countdown, Locked, RoleImage, SeatBadge, SeatGrid } from './components';
 import { buildRecordText } from './record';
@@ -87,6 +87,25 @@ export function NightPanel({ view, act }: PanelProps) {
     );
   }
 
+  if (me.role === 'wolf_beauty' && me.charm?.canAct) {
+    const last = me.charm.lastTargetId;
+    return (
+      <section className="card night">
+        <h2>💋 狼美人请睁眼</h2>
+        <p className="small">选择一名玩家魅惑。你出局时（被骑士决斗除外），被魅惑者会立即殉情出局。不能连续两晚魅惑同一人。</p>
+        {last && <p className="small gold">昨晚魅惑：{label(view, last)}（今晚不能再魅惑）</p>}
+        <TargetPicker
+          view={view}
+          candidates={alive.filter((id) => id !== last && id !== me.playerId)}
+          confirmLabel="魅惑"
+          confirmText={(id) => `确认今晚魅惑 ${label(view, id)}？`}
+          onConfirm={(id) => act({ type: 'charm', targetId: id })}
+          extra={<ConfirmButton tone="ghost" label="今晚不魅惑" confirmText="确认今晚不魅惑任何人？" onConfirm={() => act({ type: 'charm', targetId: null })} />}
+        />
+      </section>
+    );
+  }
+
   if (isWolfRole(me.role) && me.wolfVotes) {
     const badges: Record<string, SeatBadge[]> = {};
     for (const [wolfId, v] of Object.entries(me.wolfVotes)) {
@@ -97,11 +116,11 @@ export function NightPanel({ view, act }: PanelProps) {
     return (
       <section className="card night">
         <h2>🐺 狼人请睁眼</h2>
-        <p className="small">狼队友：{me.teammates.map((id) => label(view, id) + (id === me.wolfKingId ? '（狼王）' : '')).join('、') || '无'}。共同选择今晚的击杀目标（可以自刀）。票数最多者为刀口，平票随机。</p>
+        <p className="small">狼队友：{me.teammates.map((id) => label(view, id) + (me.teammateRoles[id] ? `（${ROLE_NAMES[me.teammateRoles[id]]}）` : '')).join('、') || '无'}。共同选择今晚的击杀目标（可以自刀{view.board.roles.includes('wolf_beauty') ? '，但不能刀狼美人' : ''}）。票数最多者为刀口，平票随机。</p>
         {me.wolfCanAct ? (
           <TargetPicker
             view={view}
-            candidates={alive}
+            candidates={alive.filter((id) => me.teammateRoles[id] !== 'wolf_beauty' && !(id === me.playerId && me.role === 'wolf_beauty'))}
             badges={badges}
             highlight={[me.playerId, ...me.teammates]}
             confirmLabel="锁定刀口"
@@ -162,7 +181,10 @@ export function NightPanel({ view, act }: PanelProps) {
       <div className="moon">🌙</div>
       <h2>天黑请闭眼</h2>
       <p className="muted">第 {view.day} 夜进行中，系统正在等待夜间角色行动。</p>
-      <p className="tiny muted">夜间顺序：{view.board.roles.includes('guard') ? '守卫 → ' : ''}狼人 → 女巫 → 预言家 → 猎人状态确认</p>
+      <p className="tiny muted">夜间顺序：{nightSteps({ board: view.board.id }).map((s) => STEP_LABEL[s]).join(' → ')}</p>
+      {me.role === 'wolf_beauty' && me.charm?.targetId !== undefined && (
+        <div className="result neutral">今晚{me.charm.targetId ? `魅惑：${label(view, me.charm.targetId)}` : '不魅惑'}（已锁定）</div>
+      )}
       {me.role === 'guard' && me.guard?.targetId !== undefined && (
         <div className="result neutral">今晚{me.guard.targetId ? `守护：${label(view, me.guard.targetId)}` : '空守'}（已锁定）</div>
       )}
@@ -185,12 +207,14 @@ export function NightPanel({ view, act }: PanelProps) {
   );
 }
 
+const STEP_LABEL = { guard: '守卫', wolf: '狼人', charm: '狼美人魅惑', witch: '女巫', seer: '预言家', hunter: '猎人状态确认' } as const;
+
 /** 只有自己能看到的私人信息（夜间行动界面已展示的内容不再重复） */
 export function PrivateNotes({ view }: { view: PlayerView }) {
   const me = view.me;
   if (!me?.role) return null;
   const nightActing = view.phase === 'night'
-    && (me.wolfCanAct || me.seerCanAct || !!me.witch?.canAct || !!me.wolfVotes || !!me.hunterNight?.canAck || !!me.guard?.canAct);
+    && (me.wolfCanAct || me.seerCanAct || !!me.witch?.canAct || !!me.wolfVotes || !!me.hunterNight?.canAck || !!me.guard?.canAct || !!me.charm?.canAct);
   if (nightActing) return null;
   if (me.role === 'seer' && me.seerChecks.length > 0 && view.phase !== 'night') {
     return <div className="card slim"><SeerHistory view={view} /></div>;
@@ -200,6 +224,12 @@ export function PrivateNotes({ view }: { view: PlayerView }) {
   }
   if ((me.role === 'hunter' || me.role === 'wolf_king') && me.hunterDeathCause === 'poison') {
     return <div className="card slim small">🔫 你被女巫毒杀，按规则不能开枪。</div>;
+  }
+  if (me.role === 'wolf_beauty' && me.charm?.current && view.phase !== 'night' && meAlive(view)) {
+    return <div className="card slim small">💋 当前魅惑：{label(view, me.charm.current)}（你出局时其殉情）</div>;
+  }
+  if (me.role === 'knight' && meAlive(view)) {
+    return <div className="card slim small">⚔️ {me.knight?.used ? '决斗技能已使用' : '白天发言阶段可随时发起决斗（整局一次）'}</div>;
   }
   if (me.role === 'guard' && me.guard?.lastTargetId && view.phase !== 'night' && meAlive(view)) {
     return <div className="card slim small">🛡️ 昨晚守护：{label(view, me.guard.lastTargetId)}（今晚不能再守）</div>;
@@ -401,6 +431,8 @@ export function SpeechPanel({ view, act, offset }: PanelProps) {
   const el = view.election;
   const amCandidate = el && sp.purpose === 'sheriff' && el.candidates.includes(view.me?.playerId ?? '') && !el.withdrawn.includes(view.me!.playerId);
   const title = { sheriff: '警上发言', sheriff_pk: '警长竞选 PK 发言', day: '白天发言', exile_pk: '放逐 PK 发言' }[sp.purpose];
+  const [dueling, setDueling] = useState(false);
+  const canDuel = !!view.me?.knight?.canDuel;
   const badges: Record<string, SeatBadge[]> = {};
   sp.order.forEach((id, i) => (badges[id] = [{ text: i < sp.index ? '已发言' : i === sp.index ? '发言中' : `#${i + 1}`, tone: i === sp.index ? 'gold' : 'gray' }]));
   el?.withdrawn.forEach((id) => (badges[id] = [{ text: '退水', tone: 'gray' }]));
@@ -418,8 +450,21 @@ export function SpeechPanel({ view, act, offset }: PanelProps) {
           {current === view.sheriffId && <div className="tiny gold">警长 +{SHERIFF_BONUS_SECONDS} 秒</div>}
         </div>
       </div>
-      <SeatGrid view={view} highlight={[current]} badges={badges} />
+      {canDuel && dueling ? (
+        <>
+          <p className="small gold">⚔️ 选择决斗对象：对方是狼人则其出局并直接入夜；对方是好人则你出局。整局只能决斗一次。</p>
+          <TargetPicker
+            view={view}
+            candidates={aliveIds(view).filter((id) => id !== view.me!.playerId)}
+            confirmLabel="翻牌决斗"
+            confirmText={(id) => `确认翻牌骑士，与 ${label(view, id)} 决斗？`}
+            onConfirm={(id) => act({ type: 'duel', targetId: id })}
+            extra={<button className="btn ghost" onClick={() => setDueling(false)}>取消</button>}
+          />
+        </>
+      ) : <SeatGrid view={view} highlight={[current]} badges={badges} />}
       <div className="actions">
+        {canDuel && !dueling && <button className="btn danger" onClick={() => setDueling(true)}>⚔️ 骑士决斗…</button>}
         {isMe && <button className="btn primary" onClick={() => act({ type: 'speech_done' }).catch(() => undefined)}>发言完毕</button>}
         {amCandidate && (
           <ConfirmButton tone="danger" label="退水（退出竞选）" confirmText="确认退水？退水后不能参与本次警长投票。" onConfirm={() => act({ type: 'sheriff_withdraw' })} />
@@ -579,6 +624,7 @@ function NightRecords({ view }: { view: PlayerView }) {
   const hasWitch = view.board.roles.includes('witch');
   const hasHunter = view.board.roles.includes('hunter');
   const hasGuard = view.board.roles.includes('guard');
+  const hasBeauty = view.board.roles.includes('wolf_beauty');
   const guardText = (r: NightRecord) => {
     if (!r.guard) return <span className="muted">守卫已出局</span>;
     if (!r.guard.targetId) return <span className="muted">空守</span>;
@@ -604,6 +650,14 @@ function NightRecords({ view }: { view: PlayerView }) {
         <>
           <h3>守卫守护记录</h3>
           {records.map((r) => <div key={r.night} className="small">第 {r.night} 夜：{guardText(r)}</div>)}
+        </>
+      )}
+      {hasBeauty && (
+        <>
+          <h3>狼美人魅惑记录</h3>
+          {records.map((r) => (
+            <div key={r.night} className="small">第 {r.night} 夜：{!r.charm ? <span className="muted">狼美人已出局</span> : r.charm.targetId ? <>魅惑 <b className="red">{label(view, r.charm.targetId)}</b></> : <span className="muted">不魅惑</span>}</div>
+          ))}
         </>
       )}
       {hasWitch && (
@@ -632,5 +686,5 @@ function NightRecords({ view }: { view: PlayerView }) {
 }
 
 function causeLabel(c: string | null) {
-  return { wolf: '被狼刀', poison: '被毒杀', exile: '被放逐', hunter: '被枪杀', wolf_king: '被狼王带走' }[c ?? ''] ?? '出局';
+  return { wolf: '被狼刀', poison: '被毒杀', exile: '被放逐', hunter: '被枪杀', wolf_king: '被狼王带走', charm: '殉情', duel: '骑士决斗' }[c ?? ''] ?? '出局';
 }

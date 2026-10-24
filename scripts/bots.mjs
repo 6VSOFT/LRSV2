@@ -54,7 +54,11 @@ function decide(v, me) {
     case 'lobby': return self.ready ? null : { type: 'ready', ready: true };
     case 'night':
       if (me.guard?.canAct) return { type: 'guard', targetId: Math.random() < 0.8 ? pick(alive.filter((id) => id !== me.guard.lastTargetId)) : null };
-      if (me.wolfCanAct) return { type: 'wolf_pick', targetId: pick(alive), lock: true };
+      if (me.wolfCanAct) {
+        const beauty = Object.keys(me.teammateRoles ?? {}).find((id) => me.teammateRoles[id] === 'wolf_beauty');
+        return { type: 'wolf_pick', targetId: pick(alive.filter((id) => id !== beauty && !(id === me.playerId && me.role === 'wolf_beauty'))), lock: true };
+      }
+      if (me.charm?.canAct) return { type: 'charm', targetId: pick(others.filter((id) => id !== me.charm.lastTargetId)) };
       if (me.seerCanAct) return { type: 'seer_check', targetId: pick(alive) };
       if (me.hunterNight?.canAck) return { type: 'hunter_ack' };
       if (me.witch?.canAct) {
@@ -71,6 +75,7 @@ function decide(v, me) {
     case 'ended': return null;
     case 'sheriff_signup': return self.alive && v.election.mySignup === undefined ? { type: 'sheriff_signup', join: Math.random() < 0.3 } : null;
     case 'sheriff_speech': case 'day_speech': case 'exile_pk_speech':
+      if (me.knight?.canDuel && Math.random() < 0.05) return { type: 'duel', targetId: pick(others) };
       return v.speech.order[v.speech.index] === me.playerId ? { type: 'speech_done' } : null;
     case 'speech_order': return v.sheriffId === me.playerId ? { type: 'speech_order', direction: pick(['cw', 'ccw']) } : null;
     case 'sheriff_suggest': return v.sheriffId === me.playerId ? { type: 'sheriff_suggest', targetId: pick([...alive, null]) } : null;
