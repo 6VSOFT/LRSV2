@@ -94,6 +94,19 @@ describe('9 人局：女巫首晚可以自救', () => {
   });
 });
 
+describe('9 人局：首夜信息在警长竞选结束后公布', () => {
+  it('首夜被刀者在竞选期间仍显示存活，竞选结束后才公布', () => {
+    const g = new Game({ board: 'pnl9' });
+    g.night(7, 1);
+    expect(g.state.phase).toBe('sheriff_signup');
+    expect(buildView(g.state, g.id(8), g.now).players.find((p) => p.seat === 7)!.alive).toBe(true);
+    g.skipElection();
+    expect(g.state.phase).toBe('dawn');
+    expect(g.state.dawnDeaths).toEqual(['p7']);
+    expect(g.p(7).alive).toBe(false);
+  });
+});
+
 describe('9 人局：屠边胜负', () => {
   it('屠神：预言家、女巫、猎人全部出局狼人胜', () => {
     const g = new Game({ board: 'pnl9' });
