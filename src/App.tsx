@@ -303,6 +303,17 @@ function RoomPage({ code }: { code: string }) {
           )}
         </>
       )}
+      {/* 等待室有自己的「离开房间」（会让出座位）；结束页已有「返回首页」 */}
+      {view.status === 'playing' && (
+        <div className="actions">
+          <ConfirmButton
+            tone="ghost"
+            label="离开房间"
+            confirmText="确认离开房间？游戏仍在进行，你的座位和身份会保留（按断线处理，其他人可以跳过你的发言）。之后用同一台设备打开房间链接即可回到原座位。"
+            onConfirm={() => go('/')}
+          />
+        </div>
+      )}
       {me?.isCreator && (
         <div className="actions dissolve">
           <ConfirmButton
