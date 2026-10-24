@@ -111,15 +111,17 @@ describe('API：并发与重复提交', () => {
     const h = await Promise.all([1, 2].map(() => act(store, byId(hunter.id), { type: 'hunter_ack' })));
     expect(h.filter((r) => r.status === 200).length).toBe(1);
     st = await raw(store, ps[0].code);
+    expect(st.phase).toBe('sheriff_signup');
+    expect(st.witchPotions.antidote).toBe(false);
+
+    // 全员同时选择不上警（含重复点击）→ 竞选结束 → 公布首夜信息
+    await Promise.all(ps.flatMap((p) => [1, 2].map(() => act(store, p, { type: 'sheriff_signup', join: false }))));
+    st = await raw(store, ps[0].code);
     expect(st.phase).toBe('dawn');
     expect(st.dawnDeaths).toEqual([]);
-    expect(st.witchPotions.antidote).toBe(false);
 
     // 多人同时点继续，只推进一次
     await Promise.all(ps.slice(0, 5).map((p) => act(store, p, { type: 'continue' })));
-    st = await raw(store, ps[0].code);
-    expect(st.phase).toBe('sheriff_signup');
-    await Promise.all(ps.map((p) => act(store, p, { type: 'sheriff_signup', join: false })));
     st = await raw(store, ps[0].code);
     expect(st.phase).toBe('day_speech');
     while ((st = await raw(store, ps[0].code)).phase === 'day_speech') {

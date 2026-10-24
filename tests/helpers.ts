@@ -121,6 +121,12 @@ export class Game {
     this.act(this.state.players.find((p) => p.id === id)!.seat, { type: 'exile_confirm' });
   }
 
+  /** 首夜之后：所有人不上警，走到「公布首夜信息」（之后的夜晚天亮后直接就是 dawn） */
+  dawn() {
+    if (this.state.phase === 'sheriff_signup') this.skipElection();
+    return this;
+  }
+
   /** 首日：所有人不上警 */
   skipElection() {
     for (const p of this.state.players.filter((x) => x.alive)) this.act(p.seat, { type: 'sheriff_signup', join: false });

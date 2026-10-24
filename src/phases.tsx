@@ -249,7 +249,7 @@ export function DawnPanel({ view, act }: PanelProps) {
   return (
     <section className="card center">
       <div className="moon">☀️</div>
-      <h2>第 {view.day} 天 · 天亮了</h2>
+      <h2>第 {view.day} 天 · {view.day === 1 ? '公布首夜信息' : '天亮了'}</h2>
       {deaths.length === 0 ? (
         <div className="result good">昨晚是平安夜</div>
       ) : (
@@ -348,6 +348,7 @@ export function SheriffSignupPanel({ view, act }: PanelProps) {
   return (
     <section className="card">
       <h2>🎖️ 警长竞选</h2>
+      <div className="result neutral small">☀️ 天亮了。昨晚的信息将在警长竞选结束后公布。</div>
       <p className="small">警长拥有归票时 1.5 票的放逐投票权，并决定白天发言顺序。是否上警？</p>
       {!meAlive(view) ? (
         <p className="muted">你已出局，不能参与竞选。</p>

@@ -130,7 +130,7 @@ export function createGame(
     status: 'lobby', phase: 'lobby', phaseStartedAt: now, day: 0,
     players: [newPlayer(creator.id, validateNickname(creator.nickname), creator.tokenHash, 1, now)],
     sheriffId: null, electionDone: false, sheriffSuggestion: null,
-    witchPotions: { antidote: true, poison: true }, night: null, seerChecks: [], dawnDeaths: [],
+    witchPotions: { antidote: true, poison: true }, night: null, seerChecks: [], dawnDeaths: [], pendingNightDeaths: null,
     election: null, speech: null, speechDirection: null, vote: null, voteResults: [],
     exiledPendingId: null, effects: [], continuation: null, winner: null, winReason: null, log: [],
   };
@@ -274,7 +274,7 @@ function restartGame(state: GameState, actor: Player, now: number) {
   }
   Object.assign(state, {
     status: 'lobby', day: 0, sheriffId: null, electionDone: false, sheriffSuggestion: null,
-    witchPotions: { antidote: true, poison: true }, night: null, seerChecks: [], dawnDeaths: [],
+    witchPotions: { antidote: true, poison: true }, night: null, seerChecks: [], dawnDeaths: [], pendingNightDeaths: null,
     election: null, speech: null, speechDirection: null, vote: null, voteResults: [],
     exiledPendingId: null, effects: [], continuation: null, winner: null, winReason: null, log: [],
   } satisfies Partial<GameState>);
@@ -453,13 +453,26 @@ function resolveNight(state: GameState, now: number) {
   if (night.witchAction?.type === 'poison' && night.witchAction.targetId) deaths.set(night.witchAction.targetId, 'poison');
 
   const list = bySeat(state, [...deaths.keys()]).map((id) => ({ id, cause: deaths.get(id)! }));
+  state.night = null;
+  // 首日：先竞选警长，竞选结束后再公布首夜信息（首夜出局者在公布前仍可上警、投票）
+  if (state.day === 1 && !state.electionDone) {
+    state.pendingNightDeaths = list;
+    log(state, now, '第 1 天：天亮了。先进行警长竞选，昨晚的信息将在竞选结束后公布', true);
+    startSheriffSignup(state, now);
+    return;
+  }
+  announceNightDeaths(state, list, now);
+}
+
+/** 公布夜间死讯并结算死亡（胜负 → 猎人开枪 → 警徽移交） */
+function announceNightDeaths(state: GameState, list: { id: string; cause: DeathCause }[], now: number) {
+  state.pendingNightDeaths = null;
   const effects = killPlayers(state, list, now);
   state.dawnDeaths = list.map((d) => d.id);
-  state.night = null;
   setPhase(state, 'dawn', now);
   log(state, now, list.length === 0
-    ? `第 ${state.day} 天：天亮了，昨晚是平安夜`
-    : `第 ${state.day} 天：天亮了，昨晚出局的是 ${list.map((d) => seatLabel(state, d.id)).join('、')}`, true);
+    ? `第 ${state.day} 天：${state.day === 1 ? '公布首夜信息' : '天亮了'}，昨晚是平安夜`
+    : `第 ${state.day} 天：${state.day === 1 ? '公布首夜信息' : '天亮了'}，昨晚出局的是 ${list.map((d) => seatLabel(state, d.id)).join('、')}`, true);
   if (checkWin(state, now)) return;
   state.effects = effects;
   state.continuation = 'after_dawn';
@@ -511,8 +524,7 @@ function runEffects(state: GameState, now: number, rng: Rng) {
   const cont: Continuation | null = state.continuation;
   state.continuation = null;
   if (cont === 'after_dawn') {
-    if (!state.electionDone && state.day === 1) startSheriffSignup(state, now);
-    else startDaySpeech(state, now, rng);
+    startDaySpeech(state, now, rng);
   } else if (cont === 'after_exile') {
     state.day += 1;
     beginNight(state, now);
@@ -639,6 +651,7 @@ function electSheriff(state: GameState, id: string | null, now: number, rng: Rng
   state.vote = null;
   state.speech = null;
   log(state, now, id ? `${seatLabel(state, id)} 当选警长（${reason}）` : `本局无警长（${reason}）`, true);
+  if (state.pendingNightDeaths) return announceNightDeaths(state, state.pendingNightDeaths, now);
   startDaySpeech(state, now, rng);
 }
 

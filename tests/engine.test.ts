@@ -12,8 +12,8 @@ const expectErr = (fn: () => void, msg?: RegExp) => {
 /** 第一夜平安夜后，推进到首日放逐投票（无警长） */
 function toFirstExileVote(g: Game) {
   g.night(9, 1, { action: 'save' }); // 9 号被刀被救
-  g.act(1, { type: 'continue' });
   g.skipElection();
+  g.act(1, { type: 'continue' });
   g.finishSpeeches();
   expect(g.state.phase).toBe('exile_vote');
 }
@@ -90,7 +90,8 @@ describe('信息保密（视图裁剪）', () => {
   it('游戏结束后公开完整身份与记录', () => {
     const g = new Game();
     g.state.players.filter((p) => p.role === 'werewolf').forEach((p) => (p.alive = false));
-    g.night(9, 10); // 结算时狼人已全灭
+    g.night(9, 10);
+    g.dawn(); // 结算时狼人已全灭
     expect(g.state.status).toBe('ended');
     const v = buildView(g.state, g.id(9), g.now);
     expect(v.players.every((p) => p.role !== null)).toBe(true);
@@ -118,7 +119,8 @@ describe('夜间行动顺序：狼人 → 女巫 → 预言家 → 猎人', () =
     expect(g.state.night!.step).toBe('hunter');
     expect(g.state.phase).toBe('night');
     g.act(7, { type: 'hunter_ack' });
-    expect(g.state.phase).toBe('dawn');
+    // 首夜结束后先进行警长竞选
+    expect(g.state.phase).toBe('sheriff_signup');
   });
 
   it('各步骤只对对应角色显示行动界面', () => {
@@ -144,10 +146,11 @@ describe('夜间行动顺序：狼人 → 女巫 → 预言家 → 猎人', () =
     expect(buildView(g.state, g.id(7), g.now).me!.hunterNight).toEqual({ canAck: true, canShoot: false });
     expectErr(() => g.act(9, { type: 'hunter_ack' }), /猎人/);
     g.act(7, { type: 'hunter_ack' });
+    g.dawn();
     expect(g.p(7).alive).toBe(false);
     expect(g.p(7).deathCause).toBe('poison');
     g.act(1, { type: 'continue' });
-    expect(g.state.phase).toBe('sheriff_signup'); // 被毒不能开枪，自动跳过
+    expect(g.state.phase).toBe('day_speech'); // 被毒不能开枪，自动跳过
   });
 
   it('被狼人击杀的猎人在确认时具备开枪资格，天亮后可以开枪', () => {
@@ -157,6 +160,7 @@ describe('夜间行动顺序：狼人 → 女巫 → 预言家 → 猎人', () =
     g.seerStep(1);
     expect(buildView(g.state, g.id(7), g.now).me!.hunterNight!.canShoot).toBe(true);
     g.hunterStep();
+    g.dawn();
     g.act(1, { type: 'continue' });
     expect(g.state.phase).toBe('hunter');
   });
@@ -225,6 +229,7 @@ describe('女巫', () => {
   it('解药救人抵消刀口 → 平安夜', () => {
     const g = new Game();
     g.night(9, 1, { action: 'save' });
+    g.dawn();
     expect(g.state.phase).toBe('dawn');
     expect(g.state.dawnDeaths).toEqual([]);
     expect(g.state.witchPotions.antidote).toBe(false);
@@ -244,10 +249,10 @@ describe('女巫', () => {
     expectErr(() => g.act(6, { type: 'witch', action: 'save' }));
     g.seerStep(1);
     g.hunterStep();
+    g.dawn();
     expect(g.state.dawnDeaths.sort()).toEqual(['p1', 'p9']);
     // 第二晚毒药已用完
-    g.act(1, { type: 'continue' });
-    g.skipElection();
+    g.act(2, { type: 'continue' });
     g.finishSpeeches();
     g.voteAll({}, null);
     expect(g.state.phase).toBe('night');
@@ -273,6 +278,7 @@ describe('女巫', () => {
     g.act(6, { type: 'witch', action: 'poison', targetId: g.id(9) });
     g.seerStep(1);
     g.hunterStep();
+    g.dawn();
     expect(g.state.dawnDeaths).toEqual(['p9']);
     expect(g.p(9).deathCause).toBe('poison');
   });
@@ -283,8 +289,10 @@ describe('女巫', () => {
     a.witchStep();
     a.seerStep(1);
     a.hunterStep();
+    a.dawn();
     const b = new Game();
     b.night(11, 1);
+    b.dawn();
     expect(a.state.dawnDeaths).toEqual(b.state.dawnDeaths);
   });
 
@@ -302,6 +310,7 @@ describe('女巫', () => {
     g.wait(8000);
     expect(g.state.night!.step).toBe('hunter');
     g.act(7, { type: 'hunter_ack' });
+    g.dawn();
     expect(g.state.phase).toBe('dawn');
     expect(g.state.dawnDeaths).toEqual(['p9']);
   });
@@ -311,6 +320,7 @@ describe('猎人', () => {
   it('被狼人击杀可以开枪', () => {
     const g = new Game();
     g.night(7, 1);
+    g.dawn();
     g.act(1, { type: 'continue' });
     expect(g.state.phase).toBe('hunter');
     expect(buildView(g.state, g.id(7), g.now).me!.hunterCanShoot).toBe(true);
@@ -318,14 +328,15 @@ describe('猎人', () => {
     g.act(7, { type: 'hunter_shoot', targetId: g.id(1) });
     expect(g.p(1).alive).toBe(false);
     expect(g.p(1).deathCause).toBe('hunter');
-    expect(g.state.phase).toBe('sheriff_signup');
+    expect(g.state.phase).toBe('day_speech');
   });
 
   it('被女巫毒杀不能开枪（自动跳过）', () => {
     const g = new Game();
     g.night(9, 1, { action: 'poison', target: 7 });
+    g.dawn();
     g.act(1, { type: 'continue' });
-    expect(g.state.phase).toBe('sheriff_signup');
+    expect(g.state.phase).toBe('day_speech');
     expectErr(() => g.act(7, { type: 'hunter_shoot', targetId: g.id(1) }));
   });
 
@@ -342,9 +353,9 @@ describe('猎人', () => {
 
   it('猎人开枪带走警长 → 警长移交警徽', () => {
     const g = new Game();
-    g.night(7, 1);
     g.state.sheriffId = g.id(10); // 模拟已有警长
     g.state.electionDone = true;
+    g.night(7, 1);
     g.act(1, { type: 'continue' });
     g.act(7, { type: 'hunter_shoot', targetId: g.id(10) });
     expect(g.state.phase).toBe('badge');
@@ -399,16 +410,16 @@ describe('白痴', () => {
   it('白痴被狼刀时正常出局，没有翻牌阶段', () => {
     const g = new Game();
     g.night(8, 1);
+    g.dawn();
     expect(g.p(8).alive).toBe(false);
     g.act(1, { type: 'continue' });
-    expect(g.state.phase).toBe('sheriff_signup');
+    expect(g.state.phase).toBe('day_speech');
   });
 });
 
 describe('警长竞选与投票权重', () => {
   function elect(g: Game, sheriff: number) {
     g.night(9, 1, { action: 'save' });
-    g.act(1, { type: 'continue' });
     for (const p of g.state.players) g.act(p.seat, { type: 'sheriff_signup', join: p.seat === sheriff || p.seat === 12 });
     expect(g.state.phase).toBe('sheriff_speech');
     g.finishSpeeches();
@@ -417,6 +428,9 @@ describe('警长竞选与投票权重', () => {
     expectErr(() => g.act(sheriff, { type: 'vote', targetId: g.id(sheriff) }), /自己/);
     g.voteAll({ 12: sheriff, [sheriff]: 12 }, sheriff);
     expect(g.state.sheriffId).toBe(g.id(sheriff));
+    // 竞选结束后才公布首夜信息
+    expect(g.state.phase).toBe('dawn');
+    g.act(1, { type: 'continue' });
     expect(g.state.phase).toBe('speech_order');
   }
 
@@ -477,7 +491,6 @@ describe('警长竞选与投票权重', () => {
   it('退水玩家不参与投票；全部退水则无警长', () => {
     const g = new Game();
     g.night(9, 1, { action: 'save' });
-    g.act(1, { type: 'continue' });
     for (const p of g.state.players) g.act(p.seat, { type: 'sheriff_signup', join: [1, 2, 3].includes(p.seat) });
     const first = g.state.speech!.order[0];
     const firstSeat = g.state.players.find((p) => p.id === first)!.seat;
@@ -490,7 +503,6 @@ describe('警长竞选与投票权重', () => {
   it('竞选平票 → PK → 平票玩家外的人重投 → 再平票无警长', () => {
     const g = new Game();
     g.night(9, 1, { action: 'save' });
-    g.act(1, { type: 'continue' });
     for (const p of g.state.players) g.act(p.seat, { type: 'sheriff_signup', join: [1, 2, 3].includes(p.seat) });
     g.finishSpeeches();
     // 1 和 2 平票
@@ -505,7 +517,33 @@ describe('警长竞选与投票权重', () => {
     g.voteAll({ 3: 1, 4: 2, 5: 1, 6: 2 }, null);
     expect(g.state.sheriffId).toBeNull();
     expect(g.state.electionDone).toBe(true);
+    expect(g.state.phase).toBe('dawn');
+    g.act(1, { type: 'continue' });
     expect(g.state.phase).toBe('day_speech');
+  });
+
+  it('首夜死讯在竞选结束后才公布；首夜出局者在公布前仍可上警、投票', () => {
+    const g = new Game();
+    g.night(10, 1); // 10 号首夜被刀
+    expect(g.state.phase).toBe('sheriff_signup');
+    // 公布前所有人（包括 10 号）都显示存活，视图里没有死讯
+    const v = buildView(g.state, g.id(9), g.now);
+    expect(v.players.find((p) => p.seat === 10)!.alive).toBe(true);
+    expect(v.dawnDeaths).toEqual([]);
+    expect(JSON.stringify(v)).not.toContain('pendingNightDeaths');
+    expect(v.log.some((l) => l.text.includes('出局'))).toBe(false);
+    // 10 号上警并当选
+    for (const p of g.state.players) g.act(p.seat, { type: 'sheriff_signup', join: p.seat === 10 });
+    expect(g.state.sheriffId).toBe('p10');
+    // 竞选结束 → 公布首夜信息 → 10 号出局 → 移交警徽
+    expect(g.state.phase).toBe('dawn');
+    expect(g.state.dawnDeaths).toEqual(['p10']);
+    expect(g.p(10).alive).toBe(false);
+    g.act(1, { type: 'continue' });
+    expect(g.state.phase).toBe('badge');
+    g.act(10, { type: 'badge', targetId: g.id(11) });
+    expect(g.state.sheriffId).toBe('p11');
+    expect(g.state.phase).toBe('speech_order');
   });
 });
 
@@ -513,8 +551,8 @@ describe('放逐投票', () => {
   it('投票前看不到他人选择，重复投票被拒绝，死人不能投票', () => {
     const g = new Game();
     g.night(9, 1);
-    g.act(1, { type: 'continue' });
     g.skipElection();
+    g.act(1, { type: 'continue' });
     g.finishSpeeches();
     g.act(1, { type: 'vote', targetId: g.id(10) });
     expectErr(() => g.act(1, { type: 'vote', targetId: g.id(11) }), /已投票/);
@@ -552,6 +590,7 @@ describe('屠边胜负判定', () => {
     const g = new Game();
     [5, 6, 8].forEach((s) => (g.p(s).alive = false));
     g.night(7, 1);
+    g.dawn();
     expect(g.state.status).toBe('ended');
     expect(g.state.winner).toBe('wolf');
     expect(g.state.winReason).toContain('屠神');
@@ -573,6 +612,7 @@ describe('屠边胜负判定', () => {
     const g = new Game();
     [1, 2, 3].forEach((s) => (g.p(s).alive = false));
     g.night(7, 4);
+    g.dawn();
     g.act(5, { type: 'continue' });
     g.act(7, { type: 'hunter_shoot', targetId: g.id(4) });
     expect(g.state.winner).toBe('good');
@@ -591,8 +631,8 @@ describe('屠边胜负判定', () => {
 
 function toFirstExileVoteNoSave(g: Game) {
   g.night(5, 1, { action: 'save' }); // 救下预言家
-  g.act(1, { type: 'continue' });
   g.skipElection();
+  g.act(1, { type: 'continue' });
   g.finishSpeeches();
 }
 

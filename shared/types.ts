@@ -202,6 +202,8 @@ export interface GameState {
   night: NightState | null;
   seerChecks: SeerCheck[];
   dawnDeaths: string[];
+  /** 首夜死讯：警长竞选结束前暂不公布、暂不结算 */
+  pendingNightDeaths?: { id: string; cause: DeathCause }[] | null;
   election: ElectionState | null;
   speech: SpeechState | null;
   speechDirection: 'cw' | 'ccw' | null;

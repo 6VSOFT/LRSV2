@@ -16,6 +16,7 @@ const expectErr = (fn: () => void, msg?: RegExp) => {
 function endGame(g: Game) {
   g.state.players.filter((p) => p.role === 'werewolf').forEach((p) => (p.alive = false));
   g.night(9, 10);
+  g.dawn();
   expect(g.state.status).toBe('ended');
 }
 
@@ -83,8 +84,8 @@ describe('发言与断线', () => {
   it('当前发言者在线时不能被跳过；离线超过阈值后其他人可以跳过', () => {
     const g = new Game();
     g.night(9, 1, { action: 'save' });
-    g.act(1, { type: 'continue' });
     g.skipElection();
+    g.act(1, { type: 'continue' });
     const sp = g.state.speech!;
     const cur = g.state.players.find((p) => p.id === sp.order[sp.index])!;
     const other = g.state.players.find((p) => p.id !== cur.id)!;
@@ -104,12 +105,16 @@ describe('发言与断线', () => {
     expect(v.players.find((p) => p.seat === 9)!.connected).toBe(true);
   });
 
-  it('出局玩家也可以在天亮时点继续，但不能投票或上警', () => {
+  it('出局玩家也可以在天亮时点继续，但不能投票或发言', () => {
     const g = new Game();
     g.night(9, 1);
+    g.dawn();
+    expect(g.p(9).alive).toBe(false);
     g.act(9, { type: 'continue' });
-    expect(g.state.phase).toBe('sheriff_signup');
-    expectErr(() => g.act(9, { type: 'sheriff_signup', join: true }), /出局/);
+    expect(g.state.phase).toBe('day_speech');
+    expect(g.state.speech!.order).not.toContain('p9');
+    g.finishSpeeches();
+    expectErr(() => g.act(9, { type: 'vote', targetId: g.id(1) }), /出局/);
   });
 });
 
@@ -134,9 +139,9 @@ describe('轮到你提醒', () => {
     const g = new Game();
     for (const seat of [1, 5, 6, 9]) expect(needsMyPublicAction(buildView(g.state, g.id(seat), g.now))).toBe(false);
     g.night(9, 1, { action: 'save' });
-    g.act(1, { type: 'continue' });
     expect(needsMyPublicAction(buildView(g.state, g.id(3), g.now))).toBe(true); // 上警报名
     g.skipElection();
+    g.act(1, { type: 'continue' });
     g.finishSpeeches();
     expect(needsMyPublicAction(buildView(g.state, g.id(3), g.now))).toBe(true); // 投票
     g.act(3, { type: 'vote', targetId: null });
@@ -155,6 +160,7 @@ describe('版本兼容', () => {
     g.wait(1000);
     expect(g.state.night!.step).toBe('wolf');
     g.night(9, 1);
+    g.dawn();
     expect(g.state.phase).toBe('dawn');
     expect(g.state.dawnDeaths).toEqual(['p9']);
   });
@@ -195,8 +201,10 @@ describe('API：服务端计时推进', () => {
     expect((await stepAt(34_000)).night!.step).toBe('hunter');
     vi.setSystemTime(T0 + 44_000);
     const v = (await handleApi('state', { code: host.code }, store)).body as any;
-    expect(v.phase).toBe('dawn');
-    expect(v.dawnDeaths).toEqual([victim.id]);
+    // 首夜结束 → 先竞选警长，死讯暂不公布，被刀者在视图中仍为存活
+    expect(v.phase).toBe('sheriff_signup');
+    expect(v.dawnDeaths).toEqual([]);
+    expect(v.players.find((p: any) => p.id === victim.id).alive).toBe(true);
   });
 
   it('游戏结束后的操作请求返回错误', async () => {

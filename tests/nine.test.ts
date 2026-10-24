@@ -65,6 +65,7 @@ describe('9 人局：女巫首晚可以自救', () => {
     expect(w.canSave).toBe(true);
     g.act(5, { type: 'witch', action: 'save' });
     finishNight(g);
+    g.dawn();
     expect(g.state.phase).toBe('dawn');
     expect(g.state.dawnDeaths).toEqual([]);
     expect(g.p(5).alive).toBe(true);
@@ -75,8 +76,8 @@ describe('9 人局：女巫首晚可以自救', () => {
     toWitchStep(g, 7);
     g.act(5, { type: 'witch', action: 'none' }); // 首晚不用药，保留解药
     finishNight(g);
-    g.act(1, { type: 'continue' });
     g.skipElection();
+    g.act(1, { type: 'continue' });
     g.finishSpeeches();
     g.voteAll({}, null);
     expect(g.state.phase).toBe('night');
@@ -99,6 +100,7 @@ describe('9 人局：屠边胜负', () => {
     g.p(4).alive = false;
     g.p(5).alive = false;
     g.night(6, 1); // 女巫已死，刀猎人
+    g.dawn();
     expect(g.state.winner).toBe('wolf');
     expect(g.state.winReason).toContain('屠神');
   });
@@ -108,6 +110,7 @@ describe('9 人局：屠边胜负', () => {
     g.p(7).alive = false;
     g.p(8).alive = false;
     g.night(9, 1);
+    g.dawn();
     expect(g.state.winner).toBe('wolf');
     expect(g.state.winReason).toContain('屠民');
   });
@@ -119,6 +122,7 @@ describe('9 人局：屠边胜负', () => {
     toWitchStep(g, 7);
     g.act(5, { type: 'witch', action: 'poison', targetId: g.id(3) });
     finishNight(g, 3);
+    g.dawn();
     expect(g.state.winner).toBe('good');
   });
 });
