@@ -83,10 +83,12 @@ function Home() {
       <div className="board-list" role="radiogroup" aria-label="选择板子">
         {(['std12', 'pnl9'] as const).map((id) => <BoardOption key={id} board={BOARDS[id]} selected={board === id} onSelect={() => setBoard(id)} />)}
       </div>
-      <section className="card coming-soon" aria-disabled="true">
-        <span className="coming-icon">🔒</span>
-        <span>新板子即将上线</span>
-      </section>
+      {Array.from({ length: 5 }, (_, i) => (
+        <section key={i} className="card coming-soon" aria-disabled="true">
+          <span className="coming-icon">🔒</span>
+          <span>新板子即将上线</span>
+        </section>
+      ))}
     </main>
   );
 }
