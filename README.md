@@ -177,6 +177,8 @@ npm test
 
 ## 部署到 Netlify
 
+**线上地址：https://lrsv2.netlify.app** （Netlify 项目 `lrsv2` 已连接本仓库，推送到 `main` 分支会自动部署）
+
 1. 在 Netlify 选择「Add new site → Import an existing project」，连接 GitHub 仓库 `6VSOFT/LRSV2`。
 2. 构建设置会从 `netlify.toml` 自动读取：Build command `npm run build`，Publish directory `dist`，函数目录 `netlify/functions`。
 3. 部署即可。默认使用 **Netlify Blobs** 存储房间数据，无需任何环境变量或数据库。
