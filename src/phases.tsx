@@ -209,6 +209,18 @@ export function NightPanel({ view, act }: PanelProps) {
 
 const STEP_LABEL = { guard: '守卫', wolf: '狼人', charm: '狼美人魅惑', witch: '女巫', seer: '预言家', hunter: '猎人状态确认' } as const;
 
+/** 本板子的夜间行动顺序（公开信息，游戏中常驻显示） */
+export function NightOrder({ view }: { view: PlayerView }) {
+  return (
+    <div className="card slim small night-order">
+      🌙 夜间行动顺序：
+      {nightSteps({ board: view.board.id }).map((s, i) => (
+        <span key={s} className="step"><b>{i + 1}</b> {STEP_LABEL[s]}</span>
+      ))}
+    </div>
+  );
+}
+
 /** 只有自己能看到的私人信息（夜间行动界面已展示的内容不再重复） */
 export function PrivateNotes({ view }: { view: PlayerView }) {
   const me = view.me;

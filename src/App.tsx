@@ -9,6 +9,7 @@ import { api, ApiError, clearSession, loadSession, PHASE_TITLE, rememberNickname
 import {
   BadgePanel, DawnPanel, EndPanel, ExilePanel, HunterPanel, NightPanel, PrivateNotes, SheriffSignupPanel,
   SpeechOrderPanel, SpeechPanel, SuggestPanel, VotePanel, VoteResultCard,
+  NightOrder,
 } from './phases';
 
 function roomCodeFromPath(): string | null {
@@ -275,6 +276,7 @@ function RoomPage({ code }: { code: string }) {
               )}
             />
           )}
+          {view.status === 'playing' && <NightOrder view={view} />}
           {view.status === 'playing' && <PrivateNotes view={view} />}
           <PhasePanel view={view} act={act} offset={offset} />
           {view.status === 'playing' && view.phase !== 'night' && !['sheriff_vote', 'exile_vote'].includes(view.phase) && view.voteResults.length > 0
