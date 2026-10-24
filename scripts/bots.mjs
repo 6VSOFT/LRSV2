@@ -35,9 +35,15 @@ if (existsSync(SAVE_FILE)) {
 }
 const COUNT = countArg && countArg !== 'auto' ? Number(countArg) - bots.length : room.board.size - room.players.length;
 console.log(`${room.board.name}，当前 ${room.players.length}/${room.board.size} 人`);
+// 古风昵称，跳过房间里已被占用的名字
+const NAMES = [
+  '青衫客', '白衣卿相', '寒江孤影', '云中君', '素手调琴', '醉卧沙场', '长安少年', '烟雨江南',
+  '月下独酌', '剑胆琴心', '踏雪寻梅', '落霞孤鹜', '听风者', '一叶知秋', '墨染青衣', '浮生若梦',
+];
+const freeNames = NAMES.filter((n) => !room.players.some((p) => p.nickname === n)).sort(() => Math.random() - 0.5);
 for (let i = 0; i < COUNT; i++) {
   try {
-    bots.push(await post('join', { code, nickname: `机器人${bots.length + 1}` }));
+    bots.push(await post('join', { code, nickname: freeNames[i] ?? `机器人${bots.length + 1}` }));
   } catch (e) {
     console.log('加入失败：', e.message);
     break;
