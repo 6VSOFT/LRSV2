@@ -62,7 +62,7 @@ export function buildView(state: GameState, viewerId: string | null, now: number
     winReason: state.winReason,
     log: ended ? state.log : state.log.filter((l) => l.public),
     me: viewerId ? buildPrivate(state, viewerId) : null,
-    fullReveal: ended ? { seerChecks: state.seerChecks } : null,
+    fullReveal: ended ? { seerChecks: state.seerChecks, nightRecords: state.nightRecords ?? [] } : null,
   };
 }
 

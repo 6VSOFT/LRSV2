@@ -130,7 +130,7 @@ export function createGame(
     status: 'lobby', phase: 'lobby', phaseStartedAt: now, day: 0,
     players: [newPlayer(creator.id, validateNickname(creator.nickname), creator.tokenHash, 1, now)],
     sheriffId: null, electionDone: false, sheriffSuggestion: null,
-    witchPotions: { antidote: true, poison: true }, night: null, seerChecks: [], dawnDeaths: [], pendingNightDeaths: null,
+    witchPotions: { antidote: true, poison: true }, night: null, seerChecks: [], nightRecords: [], dawnDeaths: [], pendingNightDeaths: null,
     election: null, speech: null, speechDirection: null, vote: null, voteResults: [],
     exiledPendingId: null, effects: [], continuation: null, winner: null, winReason: null, log: [],
   };
@@ -274,7 +274,7 @@ function restartGame(state: GameState, actor: Player, now: number) {
   }
   Object.assign(state, {
     status: 'lobby', day: 0, sheriffId: null, electionDone: false, sheriffSuggestion: null,
-    witchPotions: { antidote: true, poison: true }, night: null, seerChecks: [], dawnDeaths: [], pendingNightDeaths: null,
+    witchPotions: { antidote: true, poison: true }, night: null, seerChecks: [], nightRecords: [], dawnDeaths: [], pendingNightDeaths: null,
     election: null, speech: null, speechDirection: null, vote: null, voteResults: [],
     exiledPendingId: null, effects: [], continuation: null, winner: null, winReason: null, log: [],
   } satisfies Partial<GameState>);
@@ -453,6 +453,7 @@ function resolveNight(state: GameState, now: number) {
   if (night.witchAction?.type === 'poison' && night.witchAction.targetId) deaths.set(night.witchAction.targetId, 'poison');
 
   const list = bySeat(state, [...deaths.keys()]).map((id) => ({ id, cause: deaths.get(id)! }));
+  recordNight(state, night);
   state.night = null;
   // 首日：先竞选警长，竞选结束后再公布首夜信息（首夜出局者在公布前仍可上警、投票）
   if (state.day === 1 && !state.electionDone) {
@@ -462,6 +463,22 @@ function resolveNight(state: GameState, now: number) {
     return;
   }
   announceNightDeaths(state, list, now);
+}
+
+/** 保存当晚的狼人刀人、女巫用药、猎人开枪资格（结算死亡前调用，存活状态即当晚夜间的状态） */
+function recordNight(state: GameState, night: NightState) {
+  const wolves = state.players.filter((p) => p.alive && p.role === 'werewolf');
+  const witch = aliveWithRole(state, 'witch');
+  const hunter = aliveWithRole(state, 'hunter');
+  (state.nightRecords ??= []).push({
+    night: state.day,
+    wolfVotes: bySeat(state, wolves.map((w) => w.id))
+      .filter((id) => night.wolfVotes[id])
+      .map((id) => ({ wolfId: id, targetId: night.wolfVotes[id].targetId })),
+    killTargetId: night.killTargetId,
+    witch: witch ? night.witchAction ?? { type: 'none', targetId: null } : null,
+    hunter: hunter ? { hunterId: hunter.id, canShoot: hunterCanShootTonight(state, hunter.id) } : null,
+  });
 }
 
 /** 公布夜间死讯并结算死亡（胜负 → 猎人开枪 → 警徽移交） */

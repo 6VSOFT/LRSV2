@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { SHERIFF_BONUS_SECONDS, type Action } from '../shared/engine';
 import { type Board, type BoardId, BOARDS, DEFAULT_BOARD, type PlayerView } from '../shared/types';
-import { ConfirmButton, RoleCard, RoleImage, SeatGrid } from './components';
+import { ConfirmButton, CopyButton, RoleCard, RoleImage, SeatGrid } from './components';
 import { useTurnAlert, useWakeLock } from './turn';
+import { buildRecordText } from './record';
 import { api, ApiError, clearSession, loadSession, PHASE_TITLE, rememberNickname, saveSession, Session } from './lib';
 import {
   BadgePanel, DawnPanel, EndPanel, ExilePanel, HunterPanel, NightPanel, PrivateNotes, SheriffSignupPanel,
@@ -324,9 +325,12 @@ function GameLog({ view }: { view: PlayerView }) {
   const entries = view.log.slice().reverse();
   return (
     <section className="card">
-      <button className="link block" onClick={() => setOpen((o) => !o)}>
-        {view.status === 'ended' ? '完整游戏记录' : '公开记录'} {open ? '▲' : '▼'}
-      </button>
+      <div className="log-head">
+        <button className="link block" onClick={() => setOpen((o) => !o)}>
+          {view.status === 'ended' ? '完整游戏记录' : '公开记录'} {open ? '▲' : '▼'}
+        </button>
+        <CopyButton getText={() => buildRecordText(view)} ariaLabel="复制游戏记录到剪贴板" />
+      </div>
       {!open && entries[0] && <div className="small muted">{entries[0].text}</div>}
       {open && (
         <ol className="log">

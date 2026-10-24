@@ -123,6 +123,19 @@ export interface NightState {
   fakeUntil: number | null;
 }
 
+/** 每晚结算时保存的夜间记录，仅在游戏结束后公开 */
+export interface NightRecord {
+  night: number;
+  /** 每只存活狼人锁定的目标 */
+  wolfVotes: { wolfId: string; targetId: string }[];
+  /** 最终刀口（平票时为随机选出的那个） */
+  killTargetId: string | null;
+  /** 女巫当晚的操作；null 表示女巫已出局（或本局无女巫） */
+  witch: { type: 'save' | 'poison' | 'none'; targetId: string | null } | null;
+  /** 猎人当晚是否具备开枪资格；null 表示猎人已出局（或本局无猎人） */
+  hunter: { hunterId: string; canShoot: boolean } | null;
+}
+
 export interface SeerCheck {
   night: number;
   targetId: string;
@@ -201,6 +214,8 @@ export interface GameState {
   witchPotions: { antidote: boolean; poison: boolean };
   night: NightState | null;
   seerChecks: SeerCheck[];
+  /** 旧房间数据可能没有此字段 */
+  nightRecords?: NightRecord[];
   dawnDeaths: string[];
   /** 首夜死讯：警长竞选结束前暂不公布、暂不结算 */
   pendingNightDeaths?: { id: string; cause: DeathCause }[] | null;
@@ -297,5 +312,6 @@ export interface PlayerView {
   /** 游戏结束后公开 */
   fullReveal: {
     seerChecks: SeerCheck[];
+    nightRecords: NightRecord[];
   } | null;
 }

@@ -4,6 +4,7 @@ import {
 } from '../shared/engine';
 import { buildView } from '../shared/view';
 import { needsMyPublicAction } from '../src/turn';
+import { buildRecordText } from '../src/record';
 import { handleApi } from '../server/api';
 import { MemoryStore } from '../server/store';
 import { Game, T0 } from './helpers';
@@ -148,6 +149,99 @@ describe('轮到你提醒', () => {
     expect(needsMyPublicAction(buildView(g.state, g.id(3), g.now))).toBe(false);
   });
 });
+
+describe('夜间记录（结果页）', () => {
+  it('记录每晚狼人投票与刀口、女巫用药、猎人开枪资格；结束前不公开', () => {
+    const g = new Game();
+    g.rng = () => 0;
+    // 第 1 夜：两狼刀 9、两狼刀 10（平票，rng=0 选 9 号）；女巫救人
+    for (const s of [1, 2]) g.act(s, { type: 'wolf_pick', targetId: g.id(9), lock: true });
+    for (const s of [3, 4]) g.act(s, { type: 'wolf_pick', targetId: g.id(10), lock: true });
+    g.witchStep({ action: 'save' });
+    g.seerStep(1);
+    g.hunterStep();
+    expect(buildView(g.state, g.id(9), g.now).fullReveal).toBeNull();
+    g.dawn();
+    g.act(1, { type: 'continue' });
+    g.finishSpeeches();
+    g.voteAll({}, null);
+    // 第 2 夜：女巫毒猎人
+    g.wolvesKill(11);
+    g.witchStep({ action: 'poison', target: 7 });
+    g.seerStep(2);
+    g.hunterStep();
+    const r = g.state.nightRecords!;
+    expect(r[0]).toEqual({
+      night: 1,
+      wolfVotes: [
+        { wolfId: 'p1', targetId: 'p9' }, { wolfId: 'p2', targetId: 'p9' },
+        { wolfId: 'p3', targetId: 'p10' }, { wolfId: 'p4', targetId: 'p10' },
+      ],
+      killTargetId: 'p9',
+      witch: { type: 'save', targetId: 'p9' },
+      hunter: { hunterId: 'p7', canShoot: true },
+    });
+    expect(r[1].witch).toEqual({ type: 'poison', targetId: 'p7' });
+    expect(r[1].hunter).toEqual({ hunterId: 'p7', canShoot: false });
+    // 女巫、猎人已出局的夜晚记为 null
+    g.p(6).alive = false;
+    g.act(1, { type: 'continue' });
+    g.finishSpeeches();
+    g.voteAll({}, null);
+    g.night(12, 3);
+    expect(g.state.nightRecords![2].witch).toBeNull();
+    expect(g.state.nightRecords![2].hunter).toBeNull();
+    // 结束后公开
+    endGameNow(g);
+    expect(buildView(g.state, g.id(9), g.now).fullReveal!.nightRecords.length).toBe(4); // 含结束那一晚
+  });
+});
+
+describe('复制游戏记录', () => {
+  it('进行中只包含公开信息；结束后包含身份、夜间记录、投票与完整日志', () => {
+    const g = new Game();
+    g.night(9, 1);
+    const during = buildRecordText(buildView(g.state, g.id(2), g.now));
+    expect(during).toContain('【公开记录】');
+    expect(during).not.toMatch(/【身份】|女巫用|毒杀|解药|刀口|锁定击杀|：狼人|查验/);
+    g.dawn();
+    g.act(1, { type: 'continue' });
+    g.finishSpeeches();
+    g.voteAll({}, 10);
+    g.confirmExile();
+    endGameNow(g);
+    const text = buildRecordText(buildView(g.state, g.id(2), g.now));
+    for (const s of ['结果：', '【身份】', '【预言家查验】', '【女巫用药】', '【猎人技能】', '【狼人刀人】', '【投票记录】', '【完整日志】']) {
+      expect(text).toContain(s);
+    }
+    expect(text).toContain('1号 玩家1：狼人');
+    expect(text).toContain('第 1 夜：刀口 9号 玩家9（1号→9号，2号→9号，3号→9号，4号→9号）');
+    // 结果卡片的复制：同样的摘要，不含日志
+    const summary = buildRecordText(buildView(g.state, g.id(2), g.now), { includeLog: false });
+    expect(summary).toContain('【狼人刀人】');
+    expect(summary).toContain('【投票记录】');
+    expect(summary).not.toContain('【完整日志】');
+  });
+});
+
+function endGameNow(g: Game) {
+  g.state.players.filter((p) => p.role === 'werewolf').forEach((p) => (p.alive = false));
+  if (g.state.phase === 'dawn') {
+    g.act(1, { type: 'continue' });
+    g.finishSpeeches();
+    g.voteAll({}, null);
+  }
+  // 狼人已全部出局：按步骤推进（女巫、猎人已出局时靠伪装等待）
+  for (let i = 0; i < 10 && g.state.phase === 'night'; i++) {
+    const step = g.state.night!.step;
+    if (step === 'witch' && g.p(6).alive) g.witchStep();
+    else if (step === 'seer' && g.p(5).alive) g.seerStep(5);
+    else if (step === 'hunter' && g.p(7).alive) g.hunterStep();
+    else g.wait(60_000);
+  }
+  g.dawn();
+  expect(g.state.status).toBe('ended');
+}
 
 describe('版本兼容', () => {
   it('旧版本保存的夜晚（狼人与预言家同时行动）升级后自动转换为新顺序，不会卡住', () => {

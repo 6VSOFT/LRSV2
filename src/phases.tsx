@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { SHERIFF_BONUS_SECONDS, speechSecondsFor, type Action } from '../shared/engine';
-import type { PlayerView, VoteResult } from '../shared/types';
-import { ConfirmButton, Countdown, Locked, RoleImage, SeatBadge, SeatGrid } from './components';
+import type { NightRecord, PlayerView, VoteResult } from '../shared/types';
+import { ConfirmButton, CopyButton, Countdown, Locked, RoleImage, SeatBadge, SeatGrid } from './components';
+import { buildRecordText } from './record';
 import { ROLE_INFO } from './lib';
 
 export interface PanelProps {
@@ -530,13 +531,62 @@ export function EndPanel({ view }: { view: PlayerView }) {
           ))}
         </>
       )}
+      <NightRecords view={view} />
       {view.voteResults.length > 0 && (
         <>
           <h3>投票记录</h3>
           {view.voteResults.map((r, i) => <VoteResultCard key={i} view={view} result={r} />)}
         </>
       )}
+      <div className="card-foot">
+        <CopyButton getText={() => buildRecordText(view, { includeLog: false })} ariaLabel="复制本局结果到剪贴板" />
+      </div>
     </section>
+  );
+}
+
+/** 结果页：女巫用药 → 猎人技能 → 狼人刀人（按夜晚列出） */
+function NightRecords({ view }: { view: PlayerView }) {
+  const records = view.fullReveal?.nightRecords ?? [];
+  if (records.length === 0) return null;
+  const hasWitch = view.board.roles.includes('witch');
+  const hasHunter = view.board.roles.includes('hunter');
+  const witchText = (r: NightRecord) => {
+    if (!r.witch) return <span className="muted">女巫已出局</span>;
+    if (r.witch.type === 'save') return <>使用<b className="green">解药</b>救了 {label(view, r.witch.targetId)}</>;
+    if (r.witch.type === 'poison') return <>使用<b className="red">毒药</b>毒杀 {label(view, r.witch.targetId)}</>;
+    return <span className="muted">未使用药剂</span>;
+  };
+  const hunterText = (r: NightRecord) => {
+    if (!r.hunter) return <span className="muted">猎人已出局</span>;
+    return r.hunter.canShoot
+      ? <><b className="green">可以</b>发动技能（{label(view, r.hunter.hunterId)}）</>
+      : <><b className="red">不能</b>发动技能（{label(view, r.hunter.hunterId)} 被女巫毒杀）</>;
+  };
+  return (
+    <>
+      {hasWitch && (
+        <>
+          <h3>女巫用药记录</h3>
+          {records.map((r) => <div key={r.night} className="small">第 {r.night} 夜：{witchText(r)}</div>)}
+        </>
+      )}
+      {hasHunter && (
+        <>
+          <h3>猎人技能记录</h3>
+          {records.map((r) => <div key={r.night} className="small">第 {r.night} 夜：{hunterText(r)}</div>)}
+        </>
+      )}
+      <h3>狼人刀人记录</h3>
+      {records.map((r) => (
+        <div key={r.night} className="small night-record">
+          第 {r.night} 夜：刀口 <b className="red">{label(view, r.killTargetId)}</b>
+          {r.wolfVotes.length > 0 && (
+            <span className="muted">（{r.wolfVotes.map((v) => `${view.players.find((p) => p.id === v.wolfId)?.seat}号→${view.players.find((p) => p.id === v.targetId)?.seat}号`).join('，')}）</span>
+          )}
+        </div>
+      ))}
+    </>
   );
 }
 

@@ -1,6 +1,7 @@
 import { ReactNode, useEffect, useState } from 'react';
 import type { PlayerView, PublicPlayer, Role } from '../shared/types';
 import { ROLE_INFO } from './lib';
+import { copyText } from './record';
 
 export function RoleImage({ role, size = 120 }: { role: Role | 'back'; size?: number }) {
   const src = role === 'back' ? '/roles/card-back.svg' : `/roles/${role}.svg`;
@@ -138,6 +139,24 @@ export function Countdown({ startedAt, seconds, offset }: { startedAt: number; s
   const mm = Math.floor(left / 60);
   const ss = String(left % 60).padStart(2, '0');
   return <span className={`countdown ${left === 0 ? 'over' : left <= 15 ? 'warn' : ''}`}>{left === 0 ? '时间到' : `${mm}:${ss}`}</span>;
+}
+
+/** 点击后把 getText() 的内容复制到剪贴板，并短暂显示结果 */
+export function CopyButton({ getText, label = '📋 复制', ariaLabel }: { getText: () => string; label?: string; ariaLabel: string }) {
+  const [state, setState] = useState<'idle' | 'ok' | 'fail'>('idle');
+  return (
+    <button
+      className={`chip copy-btn ${state}`}
+      aria-label={ariaLabel}
+      onClick={async () => {
+        const ok = await copyText(getText());
+        setState(ok ? 'ok' : 'fail');
+        setTimeout(() => setState('idle'), 2000);
+      }}
+    >
+      {state === 'ok' ? '✓ 已复制' : state === 'fail' ? '复制失败' : label}
+    </button>
+  );
 }
 
 export function Locked({ text = '已锁定' }: { text?: string }) {
