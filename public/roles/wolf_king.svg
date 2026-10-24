@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 520" role="img" aria-labelledby="wolfking-title wolfking-desc">
+<title id="wolfking-title">wolf king</title>
+<desc id="wolfking-desc">Hand-crafted moonlit party game character card.</desc>
+<defs>
+<linearGradient id="wolfking-bg" x2=".7" y2="1"><stop stop-color="#101523"/><stop offset="1" stop-color="#090d18"/></linearGradient>
+<radialGradient id="wolfking-glow" cx=".5" cy=".4" r=".65"><stop stop-color="#9d283b" stop-opacity=".6"/><stop offset="1" stop-color="#101322" stop-opacity="0"/></radialGradient>
+<linearGradient id="wolfking-cloak" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#422638"/><stop offset="1" stop-color="#171c30"/></linearGradient>
+<linearGradient id="wolfking-hat" x2=".85" y2="1"><stop stop-color="#6c727e"/><stop offset="1" stop-color="#2c3548"/></linearGradient>
+<linearGradient id="wolfking-skin" x2=".9" y2="1"><stop stop-color="#dba889"/><stop offset="1" stop-color="#997259"/></linearGradient>
+<radialGradient id="wolfking-moon" cx=".35" cy=".3"><stop stop-color="#fff2d1"/><stop offset="1" stop-color="#fae0b2"/></radialGradient>
+<linearGradient id="wolfking-fur" x2=".8" y2="1"><stop stop-color="#576275"/><stop offset=".55" stop-color="#30364b"/><stop offset="1" stop-color="#242233"/></linearGradient>
+<radialGradient id="wolfking-aura"><stop stop-color="#fae0b2" stop-opacity=".45"/><stop offset="1" stop-color="#fae0b2" stop-opacity="0"/></radialGradient>
+<radialGradient id="wolfking-orb" cx=".38" cy=".32" r=".75"><stop stop-color="#c2fff6" stop-opacity=".9"/><stop offset=".4" stop-color="#4fbaca" stop-opacity=".75"/><stop offset=".8" stop-color="#3c5988"/><stop offset="1" stop-color="#a29ae1"/></radialGradient>
+<linearGradient id="wolfking-green" x2="0" y2="1"><stop stop-color="#b5f28e"/><stop offset="1" stop-color="#368c68"/></linearGradient>
+<linearGradient id="wolfking-poison" x2="0" y2="1"><stop stop-color="#d797ee"/><stop offset="1" stop-color="#8051bd"/></linearGradient>
+<radialGradient id="wolfking-lantern"><stop stop-color="#fff4b4"/><stop offset="1" stop-color="#c48739"/></radialGradient>
+</defs>
+<rect x="8" y="8" width="384" height="504" rx="27" fill="url(#wolfking-bg)" stroke="#d9a84a" stroke-width="2.5"/>
+<rect x="16" y="16" width="368" height="488" rx="21" fill="url(#wolfking-glow)" stroke="#d7bd83" stroke-opacity=".4"/>
+<path d="M30 86V48q0-18 18-18h39m226 0h39q18 0 18 18v38M30 434v38q0 18 18 18h39m226 0h39q18 0 18-18v-38" fill="none" stroke="#c6aa76" stroke-opacity=".55"/>
+<g fill="#e4d2a2" opacity=".65"><circle cx="58" cy="107" r="1.5"/><circle cx="329" cy="75" r="1.5"/><circle cx="308" cy="258" r="1"/><circle cx="76" cy="251" r="1"/><path d="m345 137 2 5 5 2-5 2-2 5-2-5-5-2 5-2ZM66 202l2 4 4 2-4 2-2 4-2-4-4-2 4-2Z"/></g>
+<!-- Full moon and distant firs -->
+<circle cx="200" cy="119" r="78" fill="url(#wolfking-moon)"/>
+<path d="M147 72a70 70 0 0 1 94-6M132 116a69 69 0 0 0 17 48" fill="none" stroke="#fff2cc" stroke-opacity=".3" stroke-width="2"/>
+<g fill="#573b55" opacity=".25"><circle cx="174" cy="89" r="13"/><circle cx="228" cy="133" r="22"/><circle cx="166" cy="142" r="8"/></g>
+<g fill="#121727"><path d="m30 323 30-111 30 111H73v48H47v-48Zm284 5 27-132 28 132h-17v50h-23v-50Z"/></g>
+<!-- Ragged mantle -->
+<path d="M64 465 82 365l47-53 142-2 49 57 20 98-57-17-24 30-57-18-59 18-28-30Z" fill="url(#wolfking-cloak)" stroke="#743849" stroke-width="2"/>
+<path d="m91 438 36-83 30 28-15 66 59-19 53 20-13-69 29-24 39 82-29-14-22 35-57-20-57 19-23-31Z" fill="#461d32"/>
+<!-- Ears and heavy angular head -->
+<path d="m113 202-16-98 71 55 32-13 32 13 72-55-18 99 16 49-25-9 12 47-30-10-24 63-35 23-36-23-24-63-29 10 12-47-25 9Z" fill="url(#wolfking-fur)" stroke="#96717b" stroke-width="2.5" stroke-linejoin="round"/>
+<path d="m114 130 12 64 28-30Zm173 0-41 34 28 30Z" fill="#552639"/>
+<path d="m121 147 7 29 12-12Zm158 0-20 17 13 12Z" fill="#be5360"/>
+<path d="m200 154-20 47-39-18 20 40-32 16 28 14-11 28 31-8 23 27 23-27 31 8-11-28 28-14-32-16 20-40-39 18Z" fill="#465064"/>
+<path d="m200 155 0 115-23-21 9-31-20-14 22-8Z" fill="#667084"/>
+<!-- Recessed brows and ember eyes -->
+<path d="m130 212 48 13 10 28-45-12Zm140 0-48 13-10 28 45-12Z" fill="#100e1d"/>
+<path d="m140 228 33 6 6 10-27-3Zm120 0-33 6-6 10 27-3Z" fill="#e13b37" stroke="#d03b36" stroke-width="8" stroke-opacity=".2"/>
+<path d="m145 229 27 7 3 5-22-4Zm110 0-27 7-3 5 22-4Z" fill="#ffc65c"/>
+<path d="m160 232 2 7m76-7-2 7" stroke="#4d1521" stroke-width="3"/>
+<!-- Cheek planes, muzzle and fangs -->
+<path d="m137 251 25 9 10 24-27-12Zm126 0-25 9-10 24 27-12Z" fill="#738092"/>
+<path d="m179 258-17 29 17 35 21 17 22-17 16-35-17-29-21 9Z" fill="#8a8c95"/>
+<path d="m200 273-24-5 7 17 17 7 17-7 7-17Z" fill="#141421"/>
+<path d="m183 273 17 3 16-3" fill="none" stroke="#b5a6a9" stroke-width="2"/>
+<path d="m170 294 30 11 30-11-10 27-20 12-20-12Z" fill="#260f22"/>
+<path d="m174 297 9 4-3 16Zm52 0-9 4 3 16Z" fill="#fff0d6"/>
+<path d="m187 323 13-5 13 5-13 6Z" fill="#b34a61"/>
+<path d="m200 291 0 13m-16 39 16 15 16-15" fill="none" stroke="#c1a9ac" stroke-width="2"/>
+<!-- Chest fur -->
+<path d="m155 328 23 23 22 9 23-9 23-23-9 49-22-10-15 33-15-33-22 10Z" fill="#536075"/>
+<path d="m200 363 0 29m-32-42 17 12m47-12-17 12" stroke="#7f8592" stroke-width="2"/>
+<path d="m155 407 45 17 45-17-12 30-33 11-33-11Z" fill="#1b1b2b" stroke="#794353"/>
+<path d="m186 422 14 7 14-7-14 17Z" fill="#b27561"/>
+<!-- Golden crown of the wolf king -->
+<defs><linearGradient id="wolfking-gold" x2="0" y2="1"><stop stop-color="#ffe7a1"/><stop offset=".55" stop-color="#e0a840"/><stop offset="1" stop-color="#9b6420"/></linearGradient></defs>
+<path d="M200 96 175 131 147 103 150 160h100l3-57-28 28Z" fill="url(#wolfking-gold)" stroke="#6b3f12" stroke-width="2.5" stroke-linejoin="round"/>
+<path d="M150 150h100" stroke="#6b3f12" stroke-width="2"/>
+<rect x="149" y="150" width="102" height="13" rx="3" fill="#c98a2e" stroke="#6b3f12" stroke-width="2"/>
+<circle cx="200" cy="96" r="6" fill="#ffe7a1" stroke="#6b3f12" stroke-width="2"/>
+<circle cx="147" cy="103" r="5" fill="#ffe7a1" stroke="#6b3f12" stroke-width="2"/>
+<circle cx="253" cy="103" r="5" fill="#ffe7a1" stroke="#6b3f12" stroke-width="2"/>
+<path d="m200 120 8 12-8 12-8-12Z" fill="#e5484d" stroke="#6b3f12" stroke-width="1.5"/>
+<circle cx="170" cy="156" r="3.5" fill="#e5484d"/><circle cx="230" cy="156" r="3.5" fill="#e5484d"/><circle cx="200" cy="156" r="3.5" fill="#5b9cff"/>
+<!-- Signature frame ornaments -->
+<path d="M112 483h64m48 0h64m-97 0 9-9 9 9-9 9Z" fill="none" stroke="#c6aa76" stroke-opacity=".7"/>
+<circle cx="200" cy="483" r="2" fill="#e2c98b"/>
+</svg>

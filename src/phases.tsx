@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { SHERIFF_BONUS_SECONDS, speechSecondsFor, type Action } from '../shared/engine';
-import type { NightRecord, PlayerView, VoteResult } from '../shared/types';
+import { isWolfRole, ROLE_NAMES, type NightRecord, type PlayerView, type VoteResult } from '../shared/types';
 import { ConfirmButton, CopyButton, Countdown, Locked, RoleImage, SeatBadge, SeatGrid } from './components';
 import { buildRecordText } from './record';
 import { ROLE_INFO } from './lib';
@@ -68,7 +68,26 @@ export function NightPanel({ view, act }: PanelProps) {
   const me = view.me!;
   const alive = aliveIds(view);
 
-  if (me.role === 'werewolf' && me.wolfVotes) {
+  if (me.role === 'guard' && me.guard?.canAct) {
+    const last = me.guard.lastTargetId;
+    return (
+      <section className="card night">
+        <h2>🛡️ 守卫请睁眼</h2>
+        <p className="small">选择一名存活玩家守护（可以守自己），被守护者今晚不会被狼人杀死。不能连续两晚守同一人；与女巫解药救同一人时效果抵消，仍然死亡。</p>
+        {last && <p className="small gold">昨晚守护：{label(view, last)}（今晚不能再守）</p>}
+        <TargetPicker
+          view={view}
+          candidates={alive.filter((id) => id !== last)}
+          confirmLabel="守护"
+          confirmText={(id) => `确认今晚守护 ${label(view, id)}？`}
+          onConfirm={(id) => act({ type: 'guard', targetId: id })}
+          extra={<ConfirmButton tone="ghost" label="今晚空守" confirmText="确认今晚不守护任何人？" onConfirm={() => act({ type: 'guard', targetId: null })} />}
+        />
+      </section>
+    );
+  }
+
+  if (isWolfRole(me.role) && me.wolfVotes) {
     const badges: Record<string, SeatBadge[]> = {};
     for (const [wolfId, v] of Object.entries(me.wolfVotes)) {
       const seat = view.players.find((p) => p.id === wolfId)?.seat;
@@ -78,7 +97,7 @@ export function NightPanel({ view, act }: PanelProps) {
     return (
       <section className="card night">
         <h2>🐺 狼人请睁眼</h2>
-        <p className="small">狼队友：{me.teammates.map((id) => label(view, id)).join('、') || '无'}。共同选择今晚的击杀目标（可以自刀）。票数最多者为刀口，平票随机。</p>
+        <p className="small">狼队友：{me.teammates.map((id) => label(view, id) + (id === me.wolfKingId ? '（狼王）' : '')).join('、') || '无'}。共同选择今晚的击杀目标（可以自刀）。票数最多者为刀口，平票随机。</p>
         {me.wolfCanAct ? (
           <TargetPicker
             view={view}
@@ -143,7 +162,10 @@ export function NightPanel({ view, act }: PanelProps) {
       <div className="moon">🌙</div>
       <h2>天黑请闭眼</h2>
       <p className="muted">第 {view.day} 夜进行中，系统正在等待夜间角色行动。</p>
-      <p className="tiny muted">夜间顺序：狼人 → 女巫 → 预言家 → 猎人状态确认</p>
+      <p className="tiny muted">夜间顺序：{view.board.roles.includes('guard') ? '守卫 → ' : ''}狼人 → 女巫 → 预言家 → 猎人状态确认</p>
+      {me.role === 'guard' && me.guard?.targetId !== undefined && (
+        <div className="result neutral">今晚{me.guard.targetId ? `守护：${label(view, me.guard.targetId)}` : '空守'}（已锁定）</div>
+      )}
       {me.role === 'hunter' && me.hunterNight && (
         <div className={`result ${me.hunterNight.canShoot ? 'good' : 'bad'}`}>
           已确认：今晚你{me.hunterNight.canShoot ? '具备' : '不具备'}开枪资格
@@ -168,7 +190,7 @@ export function PrivateNotes({ view }: { view: PlayerView }) {
   const me = view.me;
   if (!me?.role) return null;
   const nightActing = view.phase === 'night'
-    && (me.wolfCanAct || me.seerCanAct || !!me.witch?.canAct || !!me.wolfVotes || !!me.hunterNight?.canAck);
+    && (me.wolfCanAct || me.seerCanAct || !!me.witch?.canAct || !!me.wolfVotes || !!me.hunterNight?.canAck || !!me.guard?.canAct);
   if (nightActing) return null;
   if (me.role === 'seer' && me.seerChecks.length > 0 && view.phase !== 'night') {
     return <div className="card slim"><SeerHistory view={view} /></div>;
@@ -176,8 +198,11 @@ export function PrivateNotes({ view }: { view: PlayerView }) {
   if (me.role === 'witch' && me.witch && view.phase !== 'night' && meAlive(view)) {
     return <div className="card slim small">🧪 解药 {me.witch.antidote ? '×1' : '已用'} · 毒药 {me.witch.poison ? '×1' : '已用'}</div>;
   }
-  if (me.role === 'hunter' && me.hunterDeathCause === 'poison') {
+  if ((me.role === 'hunter' || me.role === 'wolf_king') && me.hunterDeathCause === 'poison') {
     return <div className="card slim small">🔫 你被女巫毒杀，按规则不能开枪。</div>;
+  }
+  if (me.role === 'guard' && me.guard?.lastTargetId && view.phase !== 'night' && meAlive(view)) {
+    return <div className="card slim small">🛡️ 昨晚守护：{label(view, me.guard.lastTargetId)}（今晚不能再守）</div>;
   }
   return null;
 }
@@ -265,17 +290,19 @@ export function DawnPanel({ view, act }: PanelProps) {
 export function HunterPanel({ view, act }: PanelProps) {
   const e = view.currentEffect;
   const mine = view.me?.hunterCanShoot;
+  const role = view.players.find((p) => p.id === e?.playerId)?.role;
+  const name = role ? ROLE_NAMES[role] : '猎人';
   if (!mine) {
     return (
       <section className="card center">
-        <h2>🔫 猎人发动技能</h2>
-        <p>{label(view, e?.playerId)} 是猎人，正在决定是否开枪…</p>
+        <h2>🔫 {name}发动技能</h2>
+        <p>{label(view, e?.playerId)} 是{name}，正在决定是否开枪…</p>
       </section>
     );
   }
   return (
     <section className="card">
-      <h2>🔫 你是猎人，可以开枪</h2>
+      <h2>🔫 你是{name}，可以开枪</h2>
       <p className="small">选择一名存活玩家带走，或选择不开枪。</p>
       <TargetPicker
         view={view}
@@ -551,6 +578,14 @@ function NightRecords({ view }: { view: PlayerView }) {
   if (records.length === 0) return null;
   const hasWitch = view.board.roles.includes('witch');
   const hasHunter = view.board.roles.includes('hunter');
+  const hasGuard = view.board.roles.includes('guard');
+  const guardText = (r: NightRecord) => {
+    if (!r.guard) return <span className="muted">守卫已出局</span>;
+    if (!r.guard.targetId) return <span className="muted">空守</span>;
+    const hit = r.guard.targetId === r.killTargetId;
+    const both = hit && r.witch?.type === 'save';
+    return <>守护 {label(view, r.guard.targetId)}{both ? <b className="red">（同守同救，仍然出局）</b> : hit ? <b className="green">（成功挡刀）</b> : null}</>;
+  };
   const witchText = (r: NightRecord) => {
     if (!r.witch) return <span className="muted">女巫已出局</span>;
     if (r.witch.type === 'save') return <>使用<b className="green">解药</b>救了 {label(view, r.witch.targetId)}</>;
@@ -565,6 +600,12 @@ function NightRecords({ view }: { view: PlayerView }) {
   };
   return (
     <>
+      {hasGuard && (
+        <>
+          <h3>守卫守护记录</h3>
+          {records.map((r) => <div key={r.night} className="small">第 {r.night} 夜：{guardText(r)}</div>)}
+        </>
+      )}
       {hasWitch && (
         <>
           <h3>女巫用药记录</h3>
@@ -591,5 +632,5 @@ function NightRecords({ view }: { view: PlayerView }) {
 }
 
 function causeLabel(c: string | null) {
-  return { wolf: '被狼刀', poison: '被毒杀', exile: '被放逐', hunter: '被枪杀' }[c ?? ''] ?? '出局';
+  return { wolf: '被狼刀', poison: '被毒杀', exile: '被放逐', hunter: '被枪杀', wolf_king: '被狼王带走' }[c ?? ''] ?? '出局';
 }

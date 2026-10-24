@@ -76,9 +76,11 @@ export const api = {
 
 export const ROLE_INFO: Record<Role, { name: string; team: string; desc: string; color: string }> = {
   werewolf: { name: '狼人', team: '狼人阵营', color: '#e5484d', desc: '每晚与狼队友共同选择击杀一名玩家（可自刀）。屠神或屠民即获胜。' },
+  wolf_king: { name: '狼王', team: '狼人阵营 · 狼王', color: '#ff6b5e', desc: '夜间与狼队友一起刀人。被放逐、被狼刀（自刀）或被猎人带走时可开枪带走一名玩家；被女巫毒杀不能开枪。' },
   seer: { name: '预言家', team: '好人阵营 · 神职', color: '#8e7cff', desc: '每晚查验一名玩家，得知其是好人还是狼人。' },
-  witch: { name: '女巫', team: '好人阵营 · 神职', color: '#3dd68c', desc: '一瓶解药、一瓶毒药，每晚最多用一瓶。12 人局不能自救，9 人局仅首晚可自救。用过解药后不再得知刀口。' },
-  hunter: { name: '猎人', team: '好人阵营 · 神职', color: '#f5a524', desc: '被狼人击杀或被放逐时可开枪带走一名玩家；被毒杀不能开枪。' },
+  witch: { name: '女巫', team: '好人阵营 · 神职', color: '#3dd68c', desc: '一瓶解药、一瓶毒药，每晚最多用一瓶。9 人局仅首晚可自救，其他板子不能自救。用过解药后不再得知刀口。' },
+  guard: { name: '守卫', team: '好人阵营 · 神职', color: '#5b9cff', desc: '每晚守护一名玩家（可以守自己或空守）免受狼刀，不能连续两晚守同一人。与女巫解药救同一人时效果抵消，该玩家仍然死亡（同守同救）。' },
+  hunter: { name: '猎人', team: '好人阵营 · 神职', color: '#f5a524', desc: '出局时可开枪带走一名玩家；被女巫毒杀不能开枪。' },
   idiot: { name: '白痴', team: '好人阵营 · 神职', color: '#2ec8d6', desc: '白天被放逐时系统自动翻牌，公布白痴身份。' },
   villager: { name: '村民', team: '好人阵营 · 平民', color: '#c9a36b', desc: '没有特殊技能，依靠发言与投票找出狼人。' },
 };
@@ -87,7 +89,7 @@ export const PHASE_TITLE: Record<PlayerView['phase'], string> = {
   lobby: '等待玩家',
   night: '夜晚',
   dawn: '天亮了',
-  hunter: '猎人技能',
+  hunter: '开枪技能',
   badge: '警徽移交',
   exile_confirm: '放逐遗言',
   sheriff_signup: '警长竞选 · 报名',

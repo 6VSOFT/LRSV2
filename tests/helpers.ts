@@ -1,5 +1,5 @@
 ﻿import { Action, addPlayer, applyAction, createGame, Rng, tick, witchMaySelfSave } from '../shared/engine';
-import { BoardId, BOARDS, GameState, Role } from '../shared/types';
+import { BoardId, BOARDS, GameState, isWolfRole, Role } from '../shared/types';
 
 /** 默认座位身份：1-4 狼，5 预言家，6 女巫，7 猎人，8 白痴，9-12 村民 */
 export const SEAT_ROLES: Role[] = [
@@ -13,6 +13,13 @@ export const SEAT_ROLES_9: Role[] = [
   'werewolf', 'werewolf', 'werewolf',
   'seer', 'witch', 'hunter',
   'villager', 'villager', 'villager',
+];
+
+/** 狼王守卫局默认座位身份：1 狼王，2-4 狼，5 预言家，6 女巫，7 猎人，8 守卫，9-12 村民 */
+export const SEAT_ROLES_WKG: Role[] = [
+  'wolf_king', 'werewolf', 'werewolf', 'werewolf',
+  'seer', 'witch', 'hunter', 'guard',
+  'villager', 'villager', 'villager', 'villager',
 ];
 
 export const T0 = 1_000_000;
@@ -31,7 +38,7 @@ export class Game {
     for (let i = 1; i <= size; i++) this.act(i, { type: 'ready', ready: true });
     this.act(1, { type: 'start' });
     // 固定身份，便于测试
-    const roles = board === 'pnl9' ? SEAT_ROLES_9 : SEAT_ROLES;
+    const roles = board === 'pnl9' ? SEAT_ROLES_9 : board === 'wkg12' ? SEAT_ROLES_WKG : SEAT_ROLES;
     this.state.players.forEach((p, i) => (p.role = roles[i]));
   }
 
@@ -64,8 +71,18 @@ export class Game {
     return this.state.players.find((p) => p.role === role);
   }
 
+  /** 守卫行动（target 为 null 表示空守）；守卫已出局则等待伪装时间 */
+  guardStep(target: number | null = null) {
+    if (this.state.night?.step !== 'guard') return;
+    const g = this.roleSeat('guard');
+    if (g?.alive) this.act(g.seat, { type: 'guard', targetId: target == null ? null : this.id(target) });
+    else this.wait(30_000);
+  }
+
+  /** 若当前是守卫步骤，先让守卫空守 */
   wolvesKill(kill: number) {
-    for (const w of this.state.players.filter((p) => p.alive && p.role === 'werewolf')) {
+    this.guardStep(null);
+    for (const w of this.state.players.filter((p) => p.alive && isWolfRole(p.role))) {
       this.act(w.seat, { type: 'wolf_pick', targetId: this.id(kill), lock: true });
     }
   }
@@ -156,8 +173,13 @@ export function playRandom(g: Game, rng: () => number) {
     switch (s.phase) {
       case 'night': {
         const n = s.night!;
-        if (n.step === 'wolf') {
-          const wolf = alive.find((p) => p.role === 'werewolf' && !n.wolfVotes[p.id]?.locked)!;
+        if (n.step === 'guard') {
+          const guard = alive.find((p) => p.role === 'guard');
+          if (!guard) { g.wait(30_000); break; }
+          const options = aliveIds.filter((id) => id !== s.lastGuardTargetId);
+          g.act(guard.seat, { type: 'guard', targetId: rng() < 0.8 ? pick(options, rng) : null });
+        } else if (n.step === 'wolf') {
+          const wolf = alive.find((p) => isWolfRole(p.role) && !n.wolfVotes[p.id]?.locked)!;
           g.act(wolf.seat, { type: 'wolf_pick', targetId: pick(aliveIds, rng), lock: true });
         } else if (n.step === 'witch') {
           const witch = alive.find((p) => p.role === 'witch');

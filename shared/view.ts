@@ -1,6 +1,6 @@
 // 按玩家身份裁剪状态：服务端只把该玩家有权知道的信息发给客户端
 import { getBoard, hunterCanShootTonight, isConnected, witchKnowsKill, witchMaySelfSave } from './engine';
-import { GameState, PlayerView, PrivateInfo, PublicPlayer } from './types';
+import { GameState, isShooterRole, isWolfRole, PlayerView, PrivateInfo, PublicPlayer } from './types';
 
 export function buildView(state: GameState, viewerId: string | null, now: number): PlayerView {
   const ended = state.status === 'ended';
@@ -70,17 +70,19 @@ function buildPrivate(state: GameState, viewerId: string): PrivateInfo | null {
   const me = state.players.find((p) => p.id === viewerId);
   if (!me) return null;
   const night = state.phase === 'night' ? state.night : null;
-  const isWolf = me.role === 'werewolf';
+  const isWolf = isWolfRole(me.role);
 
   const info: PrivateInfo = {
     playerId: me.id,
     role: me.role,
-    teammates: isWolf ? state.players.filter((p) => p.role === 'werewolf' && p.id !== me.id).map((p) => p.id) : [],
+    teammates: isWolf ? state.players.filter((p) => isWolfRole(p.role) && p.id !== me.id).map((p) => p.id) : [],
+    wolfKingId: isWolf ? state.players.find((p) => p.role === 'wolf_king' && p.id !== me.id)?.id ?? null : null,
     wolfVotes: isWolf && night?.step === 'wolf' ? night.wolfVotes : null,
     seerChecks: me.role === 'seer' ? state.seerChecks : [],
     seerCanAct: me.role === 'seer' && me.alive && night?.step === 'seer' && !night.seerTargetId,
     wolfCanAct: isWolf && me.alive && night?.step === 'wolf' && !night.wolfVotes[me.id]?.locked,
     hunterNight: null,
+    guard: null,
     witch: null,
     myBallot: state.vote && viewerId in state.vote.ballots ? state.vote.ballots[viewerId] : undefined,
     canVote: !!state.vote && state.vote.voters.includes(viewerId) && !(viewerId in state.vote.ballots)
@@ -103,11 +105,22 @@ function buildPrivate(state: GameState, viewerId: string): PrivateInfo | null {
     };
   }
 
-  if (me.role === 'hunter') {
+  if (me.role === 'guard') {
+    const guardTurn = !!night && night.step === 'guard' && me.alive;
+    info.guard = {
+      canAct: guardTurn && !night!.guardDone,
+      lastTargetId: state.lastGuardTargetId ?? null,
+      // 今晚已守护的目标（仅夜间给守卫本人看）
+      targetId: night?.guardDone ? night.guardTargetId ?? null : undefined,
+    };
+  }
+
+  if (me.role === 'hunter' && night?.step === 'hunter' && me.alive) {
     // 猎人状态确认在女巫之后，此时已能确定当晚是否被毒
-    if (night?.step === 'hunter' && me.alive) {
-      info.hunterNight = { canAck: !night.hunterAcked, canShoot: hunterCanShootTonight(state, me.id) };
-    }
+    info.hunterNight = { canAck: !night.hunterAcked, canShoot: hunterCanShootTonight(state, me.id) };
+  }
+
+  if (isShooterRole(me.role)) {
     info.hunterDeathCause = me.deathCause;
     info.hunterCanShoot = state.phase === 'hunter' && state.effects[0]?.type === 'hunter' && state.effects[0].playerId === me.id;
   }

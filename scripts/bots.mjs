@@ -53,6 +53,7 @@ function decide(v, me) {
   switch (v.phase) {
     case 'lobby': return self.ready ? null : { type: 'ready', ready: true };
     case 'night':
+      if (me.guard?.canAct) return { type: 'guard', targetId: Math.random() < 0.8 ? pick(alive.filter((id) => id !== me.guard.lastTargetId)) : null };
       if (me.wolfCanAct) return { type: 'wolf_pick', targetId: pick(alive), lock: true };
       if (me.seerCanAct) return { type: 'seer_check', targetId: pick(alive) };
       if (me.hunterNight?.canAck) return { type: 'hunter_ack' };

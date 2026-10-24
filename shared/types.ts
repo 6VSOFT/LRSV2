@@ -1,19 +1,31 @@
 // 共享类型定义：服务端完整状态（GameState）与客户端可见视图（PlayerView）
 
-export type Role = 'werewolf' | 'seer' | 'witch' | 'hunter' | 'idiot' | 'villager';
+export type Role = 'werewolf' | 'wolf_king' | 'seer' | 'witch' | 'hunter' | 'idiot' | 'guard' | 'villager';
 export type Team = 'wolf' | 'good';
-export type DeathCause = 'wolf' | 'poison' | 'exile' | 'hunter';
+export type DeathCause = 'wolf' | 'poison' | 'exile' | 'hunter' | 'wolf_king';
 
 export const ROLE_NAMES: Record<Role, string> = {
   werewolf: '狼人',
+  wolf_king: '狼王',
   seer: '预言家',
   witch: '女巫',
   hunter: '猎人',
   idiot: '白痴',
+  guard: '守卫',
   villager: '村民',
 };
 
-export const GOD_ROLES: Role[] = ['seer', 'witch', 'hunter', 'idiot'];
+export const GOD_ROLES: Role[] = ['seer', 'witch', 'hunter', 'idiot', 'guard'];
+
+/** 狼人阵营角色（狼王也参与夜间刀人） */
+export function isWolfRole(role: Role | null | undefined): boolean {
+  return role === 'werewolf' || role === 'wolf_king';
+}
+
+/** 出局时可以开枪带人的角色 */
+export function isShooterRole(role: Role | null | undefined): boolean {
+  return role === 'hunter' || role === 'wolf_king';
+}
 
 /** 预女猎白 12 人标准局 */
 export const STANDARD_12: Role[] = [
@@ -29,7 +41,14 @@ export const STANDARD_9: Role[] = [
   'villager', 'villager', 'villager',
 ];
 
-export type BoardId = 'std12' | 'pnl9';
+/** 狼王守卫 12 人局 */
+export const WOLF_KING_GUARD_12: Role[] = [
+  'wolf_king', 'werewolf', 'werewolf', 'werewolf',
+  'seer', 'witch', 'hunter', 'guard',
+  'villager', 'villager', 'villager', 'villager',
+];
+
+export type BoardId = 'std12' | 'pnl9' | 'wkg12';
 
 export interface Board {
   id: BoardId;
@@ -40,6 +59,8 @@ export interface Board {
   summary: string;
   /** 女巫首晚可以自救 */
   witchSelfSaveFirstNight: boolean;
+  /** 首页与等待室展示的特殊规则 */
+  notes?: string[];
 }
 
 export const BOARDS: Record<BoardId, Board> = {
@@ -53,7 +74,16 @@ export const BOARDS: Record<BoardId, Board> = {
     summary: '3 狼人 · 预言家 · 女巫 · 猎人 · 3 村民',
     witchSelfSaveFirstNight: true,
   },
+  wkg12: {
+    id: 'wkg12', name: '12 人狼王守卫', size: 12, roles: WOLF_KING_GUARD_12,
+    summary: '狼王 · 3 狼人 · 预言家 · 女巫 · 猎人 · 守卫 · 4 村民',
+    witchSelfSaveFirstNight: false,
+    notes: ['守卫不可连续两晚守同一人，同守同救必死', '狼王被毒杀不能开枪'],
+  },
 };
+
+/** 首页展示顺序 */
+export const BOARD_ORDER: BoardId[] = ['std12', 'pnl9', 'wkg12'];
 
 export const DEFAULT_BOARD: BoardId = 'std12';
 
@@ -106,9 +136,9 @@ export interface WolfVote {
   locked: boolean;
 }
 
-/** 夜间行动严格按顺序进行：狼人 → 女巫 → 预言家 → 猎人状态确认 */
-export type NightStep = 'wolf' | 'witch' | 'seer' | 'hunter';
-export const NIGHT_STEPS: NightStep[] = ['wolf', 'witch', 'seer', 'hunter'];
+/** 夜间行动严格按顺序进行：（守卫 →）狼人 → 女巫 → 预言家 → 猎人状态确认；板子里没有的角色整步跳过 */
+export type NightStep = 'guard' | 'wolf' | 'witch' | 'seer' | 'hunter';
+export const NIGHT_STEPS: NightStep[] = ['guard', 'wolf', 'witch', 'seer', 'hunter'];
 
 export interface NightState {
   step: NightStep;
@@ -119,6 +149,9 @@ export interface NightState {
   witchAction: { type: 'save' | 'poison' | 'none'; targetId: string | null } | null;
   seerTargetId: string | null;
   hunterAcked: boolean;
+  /** 守卫今晚守护的玩家；null 表示空守。旧数据没有这些字段 */
+  guardTargetId?: string | null;
+  guardDone?: boolean;
   /** 该步骤角色已出局（或本局没有该角色）时，用随机等待时间掩盖，避免通过夜晚节奏推断身份 */
   fakeUntil: number | null;
 }
@@ -134,6 +167,8 @@ export interface NightRecord {
   witch: { type: 'save' | 'poison' | 'none'; targetId: string | null } | null;
   /** 猎人当晚是否具备开枪资格；null 表示猎人已出局（或本局无猎人） */
   hunter: { hunterId: string; canShoot: boolean } | null;
+  /** 守卫当晚守护的玩家；null 表示守卫已出局；undefined 表示本局无守卫 */
+  guard?: { guardId: string; targetId: string | null } | null;
 }
 
 export interface SeerCheck {
@@ -182,6 +217,7 @@ export interface VoteResult {
 }
 
 export type Effect =
+  /** 猎人或狼王出局后开枪 */
   | { type: 'hunter'; playerId: string }
   | { type: 'badge'; playerId: string };
 
@@ -212,6 +248,8 @@ export interface GameState {
   electionDone: boolean;
   sheriffSuggestion: { targetId: string | null } | null;
   witchPotions: { antidote: boolean; poison: boolean };
+  /** 守卫上一晚守护的玩家（不能连续两晚守护同一人） */
+  lastGuardTargetId?: string | null;
   night: NightState | null;
   seerChecks: SeerCheck[];
   /** 旧房间数据可能没有此字段 */
@@ -257,6 +295,8 @@ export interface PrivateInfo {
   playerId: string;
   role: Role | null;
   teammates: string[];
+  /** 狼人阵营：狼队友中的狼王（自己是狼王或本局无狼王时为 null） */
+  wolfKingId: string | null;
   /** 狼人夜间：队友当前的选择 */
   wolfVotes: Record<string, WolfVote> | null;
   seerChecks: SeerCheck[];
@@ -264,6 +304,8 @@ export interface PrivateInfo {
   wolfCanAct: boolean;
   /** 夜间猎人状态确认步骤：系统告知当晚是否具备开枪资格 */
   hunterNight: { canAck: boolean; canShoot: boolean } | null;
+  /** 守卫夜间行动 */
+  guard: { canAct: boolean; lastTargetId: string | null; targetId: string | null | undefined } | null;
   witch: {
     antidote: boolean;
     poison: boolean;

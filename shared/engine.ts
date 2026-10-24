@@ -1,7 +1,7 @@
 // 自动法官核心规则引擎（纯函数式变更 GameState，服务端唯一可信结算）
 import {
-  Board, BoardId, BOARDS, Continuation, DEFAULT_BOARD, DeathCause, Effect, GameState, GOD_ROLES, NIGHT_STEPS, NightState,
-  NightStep, Player, Role, ROLE_NAMES, Settings, SpeechPurpose, Team, VoteResult, VoteState,
+  Board, BoardId, BOARDS, Continuation, DEFAULT_BOARD, DeathCause, Effect, GameState, GOD_ROLES, isShooterRole, isWolfRole,
+  NIGHT_STEPS, NightState, NightStep, Player, Role, ROLE_NAMES, Settings, SpeechPurpose, Team, VoteResult, VoteState,
 } from './types';
 
 export class GameError extends Error {}
@@ -11,7 +11,7 @@ export const OFFLINE_MS = 30_000;
 const PRESENCE_WRITE_MS = 10_000;
 /** 角色已死亡时的伪装等待，避免通过夜晚时长推断身份 */
 const FAKE_STEP_MS: Record<NightStep, [number, number]> = {
-  wolf: [0, 0], witch: [8_000, 16_000], seer: [8_000, 16_000], hunter: [4_000, 9_000],
+  guard: [6_000, 12_000], wolf: [0, 0], witch: [8_000, 16_000], seer: [8_000, 16_000], hunter: [4_000, 9_000],
 };
 
 export type Action =
@@ -22,6 +22,7 @@ export type Action =
   | { type: 'start' }
   | { type: 'wolf_pick'; targetId: string; lock: boolean }
   | { type: 'seer_check'; targetId: string }
+  | { type: 'guard'; targetId: string | null }
   | { type: 'hunter_ack' }
   | { type: 'witch'; action: 'save' | 'poison' | 'none'; targetId?: string | null }
   | { type: 'continue' }
@@ -130,7 +131,7 @@ export function createGame(
     status: 'lobby', phase: 'lobby', phaseStartedAt: now, day: 0,
     players: [newPlayer(creator.id, validateNickname(creator.nickname), creator.tokenHash, 1, now)],
     sheriffId: null, electionDone: false, sheriffSuggestion: null,
-    witchPotions: { antidote: true, poison: true }, night: null, seerChecks: [], nightRecords: [], dawnDeaths: [], pendingNightDeaths: null,
+    witchPotions: { antidote: true, poison: true }, lastGuardTargetId: null, night: null, seerChecks: [], nightRecords: [], dawnDeaths: [], pendingNightDeaths: null,
     election: null, speech: null, speechDirection: null, vote: null, voteResults: [],
     exiledPendingId: null, effects: [], continuation: null, winner: null, winReason: null, log: [],
   };
@@ -186,6 +187,7 @@ export function applyAction(state: GameState, actorId: string, action: Action, n
   switch (action.type) {
     case 'wolf_pick': return wolfPick(state, actor, action.targetId, action.lock, now, rng);
     case 'seer_check': return seerCheck(state, actor, action.targetId, now, rng);
+    case 'guard': return guardAct(state, actor, action.targetId ?? null, now, rng);
     case 'hunter_ack': return hunterAck(state, actor, now, rng);
     case 'witch': return witchAct(state, actor, action.action, action.targetId ?? null, now, rng);
     case 'continue': return dawnContinue(state, now, rng);
@@ -274,7 +276,7 @@ function restartGame(state: GameState, actor: Player, now: number) {
   }
   Object.assign(state, {
     status: 'lobby', day: 0, sheriffId: null, electionDone: false, sheriffSuggestion: null,
-    witchPotions: { antidote: true, poison: true }, night: null, seerChecks: [], nightRecords: [], dawnDeaths: [], pendingNightDeaths: null,
+    witchPotions: { antidote: true, poison: true }, lastGuardTargetId: null, night: null, seerChecks: [], nightRecords: [], dawnDeaths: [], pendingNightDeaths: null,
     election: null, speech: null, speechDirection: null, vote: null, voteResults: [],
     exiledPendingId: null, effects: [], continuation: null, winner: null, winReason: null, log: [],
   } satisfies Partial<GameState>);
@@ -295,12 +297,28 @@ export function startGame(state: GameState, actor: Player, now: number, rng: Rng
   state.day = 1;
   log(state, now, `游戏开始：${board.name}（${board.summary}），身份已发放`, true);
   for (const p of state.players) log(state, now, `${seatLabel(state, p.id)} 的身份是 ${ROLE_NAMES[p.role!]}`, false);
-  beginNight(state, now);
+  beginNight(state, now, rng);
 }
 
 // ---------------- 夜晚 ----------------
 
-function beginNight(state: GameState, now: number) {
+const STEP_ROLE: Record<NightStep, Role> = { guard: 'guard', wolf: 'werewolf', witch: 'witch', seer: 'seer', hunter: 'hunter' };
+
+/** 本板子的夜间步骤：板子里没有的角色整步跳过（不需要伪装等待，因为人人都知道本局没有该角色） */
+export function nightSteps(state: Pick<GameState, 'board'>): NightStep[] {
+  const roles = getBoard(state).roles;
+  return NIGHT_STEPS.filter((s) => s === 'wolf' || roles.includes(STEP_ROLE[s]));
+}
+
+/** 进入某一步：角色已出局时随机等待一段时间再继续 */
+function enterStep(state: GameState, night: NightState, step: NightStep, now: number, rng: Rng) {
+  night.step = step;
+  night.stepStartedAt = now;
+  const alive = step === 'wolf' || aliveWithRole(state, STEP_ROLE[step]);
+  night.fakeUntil = alive ? null : now + randRange(FAKE_STEP_MS[step], rng);
+}
+
+function beginNight(state: GameState, now: number, rng: Rng) {
   state.speech = null;
   state.vote = null;
   state.sheriffSuggestion = null;
@@ -309,10 +327,12 @@ function beginNight(state: GameState, now: number) {
   const night: NightState = {
     step: 'wolf', stepStartedAt: now, wolfVotes: {}, killTargetId: null,
     witchDone: false, witchAction: null, seerTargetId: null, hunterAcked: false, fakeUntil: null,
+    guardTargetId: null, guardDone: false,
   };
   state.night = night;
   setPhase(state, 'night', now);
   log(state, now, `第 ${state.day} 夜：天黑请闭眼`, true);
+  enterStep(state, night, nightSteps(state)[0], now, rng);
 }
 
 function requireNight(state: GameState, step: NightState['step']): NightState {
@@ -323,7 +343,7 @@ function requireNight(state: GameState, step: NightState['step']): NightState {
 
 function wolfPick(state: GameState, actor: Player, targetId: string, lock: boolean, now: number, rng: Rng) {
   const night = requireNight(state, 'wolf');
-  if (actor.role !== 'werewolf' || !actor.alive) fail('只有存活的狼人可以行动');
+  if (!isWolfRole(actor.role) || !actor.alive) fail('只有存活的狼人可以行动');
   const prev = night.wolfVotes[actor.id];
   if (prev?.locked) fail('你的选择已锁定');
   const target = mustPlayer(state, targetId);
@@ -340,9 +360,27 @@ function seerCheck(state: GameState, actor: Player, targetId: string, now: numbe
   const target = mustPlayer(state, targetId);
   if (!target.alive) fail('不能查验已出局的玩家');
   night.seerTargetId = target.id;
-  const isWolf = target.role === 'werewolf';
+  const isWolf = isWolfRole(target.role);
   state.seerChecks.push({ night: state.day, targetId: target.id, isWolf });
   log(state, now, `预言家查验 ${seatLabel(state, target.id)}：${isWolf ? '狼人' : '好人'}`, false);
+  advanceNight(state, now, rng);
+}
+
+function guardAct(state: GameState, actor: Player, targetId: string | null, now: number, rng: Rng) {
+  const night = requireNight(state, 'guard');
+  if (actor.role !== 'guard' || !actor.alive) fail('只有存活的守卫可以守护');
+  if (night.guardDone) fail('今晚已守护，操作已锁定');
+  if (targetId != null) {
+    const target = mustPlayer(state, targetId);
+    if (!target.alive) fail('不能守护已出局的玩家');
+    if (target.id === state.lastGuardTargetId) fail('不能连续两晚守护同一名玩家');
+    night.guardTargetId = target.id;
+    log(state, now, `守卫守护 ${seatLabel(state, target.id)}`, false);
+  } else {
+    night.guardTargetId = null;
+    log(state, now, '守卫今晚空守', false);
+  }
+  night.guardDone = true;
   advanceNight(state, now, rng);
 }
 
@@ -386,7 +424,7 @@ function witchAct(state: GameState, actor: Player, type: 'save' | 'poison' | 'no
   advanceNight(state, now, rng);
 }
 
-/** 猎人当晚是否具备开枪资格：被女巫毒杀则不具备 */
+/** 猎人（或狼王）当晚是否具备开枪资格：被女巫毒杀则不具备 */
 export function hunterCanShootTonight(state: GameState, hunterId: string): boolean {
   const a = state.night?.witchAction;
   return !(a?.type === 'poison' && a.targetId === hunterId);
@@ -401,11 +439,10 @@ function hunterAck(state: GameState, actor: Player, now: number, rng: Rng) {
   advanceNight(state, now, rng);
 }
 
-const STEP_ROLE: Record<NightStep, Role> = { wolf: 'werewolf', witch: 'witch', seer: 'seer', hunter: 'hunter' };
-
 function stepDone(state: GameState, night: NightState, now: number): boolean {
   switch (night.step) {
-    case 'wolf': return state.players.filter((p) => p.alive && p.role === 'werewolf').every((w) => night.wolfVotes[w.id]?.locked);
+    case 'guard': return aliveWithRole(state, 'guard') ? !!night.guardDone : now >= (night.fakeUntil ?? 0);
+    case 'wolf': return state.players.filter((p) => p.alive && isWolfRole(p.role)).every((w) => night.wolfVotes[w.id]?.locked);
     case 'witch': return aliveWithRole(state, 'witch') ? night.witchDone : now >= (night.fakeUntil ?? 0);
     case 'seer': return aliveWithRole(state, 'seer') ? !!night.seerTargetId : now >= (night.fakeUntil ?? 0);
     case 'hunter': return aliveWithRole(state, 'hunter') ? night.hunterAcked : now >= (night.fakeUntil ?? 0);
@@ -418,16 +455,14 @@ function advanceNight(state: GameState, now: number, rng: Rng) {
   if (state.phase !== 'night' || !night) return;
   while (stepDone(state, night, now)) {
     if (night.step === 'wolf') {
-      const wolves = state.players.filter((p) => p.alive && p.role === 'werewolf');
+      const wolves = state.players.filter((p) => p.alive && isWolfRole(p.role));
       night.killTargetId = tallyWolves(state, night, wolves.map((w) => w.id), rng);
       log(state, now, `狼人最终刀口：${seatLabel(state, night.killTargetId)}`, false);
     }
-    const next = NIGHT_STEPS[NIGHT_STEPS.indexOf(night.step) + 1];
+    const steps = nightSteps(state);
+    const next = steps[steps.indexOf(night.step) + 1];
     if (!next) return resolveNight(state, now);
-    night.step = next;
-    night.stepStartedAt = now;
-    // 角色已出局或本局不存在：随机等待一段时间再继续
-    night.fakeUntil = aliveWithRole(state, STEP_ROLE[next]) ? null : now + randRange(FAKE_STEP_MS[next], rng);
+    enterStep(state, night, next, now, rng);
   }
 }
 
@@ -448,7 +483,11 @@ function resolveNight(state: GameState, now: number) {
   const deaths = new Map<string, DeathCause>();
   const kill = night.killTargetId;
   const saved = night.witchAction?.type === 'save' && night.witchAction.targetId === kill;
-  if (kill && !saved) deaths.set(kill, 'wolf');
+  const guarded = !!kill && night.guardTargetId === kill;
+  // 守卫守护与女巫解药各自都能挡刀；同守同救则效果抵消，该玩家仍然死亡
+  if (kill && saved === guarded) deaths.set(kill, 'wolf');
+  if (kill && saved && guarded) log(state, now, `${seatLabel(state, kill)} 同时被守护和解救（同守同救），仍然出局`, false);
+  if (getBoard(state).roles.includes('guard')) state.lastGuardTargetId = night.guardTargetId ?? null;
   // 毒药独立结算；同时被刀与被毒只死一次，按毒杀处理（猎人不能开枪）
   if (night.witchAction?.type === 'poison' && night.witchAction.targetId) deaths.set(night.witchAction.targetId, 'poison');
 
@@ -465,11 +504,12 @@ function resolveNight(state: GameState, now: number) {
   announceNightDeaths(state, list, now);
 }
 
-/** 保存当晚的狼人刀人、女巫用药、猎人开枪资格（结算死亡前调用，存活状态即当晚夜间的状态） */
+/** 保存当晚的狼人刀人、女巫用药、猎人开枪资格、守卫守护（结算死亡前调用，存活状态即当晚夜间的状态） */
 function recordNight(state: GameState, night: NightState) {
-  const wolves = state.players.filter((p) => p.alive && p.role === 'werewolf');
+  const wolves = state.players.filter((p) => p.alive && isWolfRole(p.role));
   const witch = aliveWithRole(state, 'witch');
   const hunter = aliveWithRole(state, 'hunter');
+  const guard = aliveWithRole(state, 'guard');
   (state.nightRecords ??= []).push({
     night: state.day,
     wolfVotes: bySeat(state, wolves.map((w) => w.id))
@@ -478,6 +518,7 @@ function recordNight(state: GameState, night: NightState) {
     killTargetId: night.killTargetId,
     witch: witch ? night.witchAction ?? { type: 'none', targetId: null } : null,
     hunter: hunter ? { hunterId: hunter.id, canShoot: hunterCanShootTonight(state, hunter.id) } : null,
+    ...(getBoard(state).roles.includes('guard') ? { guard: guard ? { guardId: guard.id, targetId: night.guardTargetId ?? null } : null } : {}),
   });
 }
 
@@ -502,7 +543,7 @@ function dawnContinue(state: GameState, now: number, rng: Rng) {
 
 // ---------------- 死亡与连锁效果 ----------------
 
-/** 标记死亡并返回需要处理的后续效果（猎人开枪 → 警徽移交） */
+/** 标记死亡并返回需要处理的后续效果（猎人/狼王开枪 → 警徽移交）；被毒杀不能开枪 */
 function killPlayers(state: GameState, list: { id: string; cause: DeathCause }[], now: number): Effect[] {
   const hunters: Effect[] = [];
   const badges: Effect[] = [];
@@ -513,14 +554,14 @@ function killPlayers(state: GameState, list: { id: string; cause: DeathCause }[]
     p.deathCause = cause;
     p.deathDay = state.day;
     log(state, now, `${seatLabel(state, id)} 出局（${causeText(cause)}）`, false);
-    if (p.role === 'hunter' && (cause === 'wolf' || cause === 'exile')) hunters.push({ type: 'hunter', playerId: id });
+    if (isShooterRole(p.role) && cause !== 'poison') hunters.push({ type: 'hunter', playerId: id });
     if (state.sheriffId === id) badges.push({ type: 'badge', playerId: id });
   }
   return [...hunters, ...badges];
 }
 
 export function causeText(c: DeathCause) {
-  return { wolf: '被狼人击杀', poison: '被女巫毒杀', exile: '被投票放逐', hunter: '被猎人带走' }[c];
+  return { wolf: '被狼人击杀', poison: '被女巫毒杀', exile: '被投票放逐', hunter: '被猎人带走', wolf_king: '被狼王带走' }[c];
 }
 
 function runEffects(state: GameState, now: number, rng: Rng) {
@@ -528,8 +569,9 @@ function runEffects(state: GameState, now: number, rng: Rng) {
     const e = state.effects[0];
     if (e.type === 'hunter') {
       setPhase(state, 'hunter', now);
-      log(state, now, `${seatLabel(state, e.playerId)} 翻牌：猎人，正在决定是否开枪`, true);
-      mustPlayer(state, e.playerId).revealed = true;
+      const shooter = mustPlayer(state, e.playerId);
+      log(state, now, `${seatLabel(state, e.playerId)} 翻牌：${ROLE_NAMES[shooter.role!]}，正在决定是否开枪`, true);
+      shooter.revealed = true;
       return;
     }
     if (e.type === 'badge' && state.sheriffId === e.playerId) {
@@ -544,7 +586,7 @@ function runEffects(state: GameState, now: number, rng: Rng) {
     startDaySpeech(state, now, rng);
   } else if (cont === 'after_exile') {
     state.day += 1;
-    beginNight(state, now);
+    beginNight(state, now, rng);
   }
 }
 
@@ -558,8 +600,9 @@ function currentEffect(state: GameState, type: Effect['type'], actor: Player): E
 function hunterShoot(state: GameState, actor: Player, targetId: string | null, now: number, rng: Rng) {
   currentEffect(state, 'hunter', actor);
   state.effects.shift();
+  const name = ROLE_NAMES[actor.role!];
   if (targetId == null) {
-    log(state, now, `猎人 ${seatLabel(state, actor.id)} 选择不开枪`, true);
+    log(state, now, `${name} ${seatLabel(state, actor.id)} 选择不开枪`, true);
     runEffects(state, now, rng);
     return;
   }
@@ -568,8 +611,8 @@ function hunterShoot(state: GameState, actor: Player, targetId: string | null, n
     state.effects.unshift({ type: 'hunter', playerId: actor.id });
     fail('只能选择其他存活玩家');
   }
-  log(state, now, `猎人 ${seatLabel(state, actor.id)} 开枪带走了 ${seatLabel(state, target.id)}`, true);
-  const more = killPlayers(state, [{ id: target.id, cause: 'hunter' }], now);
+  log(state, now, `${name} ${seatLabel(state, actor.id)} 开枪带走了 ${seatLabel(state, target.id)}`, true);
+  const more = killPlayers(state, [{ id: target.id, cause: actor.role === 'wolf_king' ? 'wolf_king' : 'hunter' }], now);
   if (checkWin(state, now)) return;
   state.effects.unshift(...more);
   runEffects(state, now, rng);
@@ -594,7 +637,7 @@ function badgeAct(state: GameState, actor: Player, targetId: string | null, now:
 
 export function evaluateWinner(state: GameState): { winner: Team; reason: string } | null {
   const alive = state.players.filter((p) => p.alive);
-  const wolves = alive.filter((p) => p.role === 'werewolf').length;
+  const wolves = alive.filter((p) => isWolfRole(p.role)).length;
   const gods = alive.filter((p) => p.role && GOD_ROLES.includes(p.role)).length;
   const villagers = alive.filter((p) => p.role === 'villager').length;
   // 统一顺序：先判断狼人是否全灭（同时达成时好人胜），再判断屠神、屠民

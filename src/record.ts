@@ -1,7 +1,7 @@
 import type { NightRecord, PlayerView, VoteResult } from '../shared/types';
 import { ROLE_INFO } from './lib';
 
-const CAUSE: Record<string, string> = { wolf: '被狼刀', poison: '被毒杀', exile: '被放逐', hunter: '被猎人带走' };
+const CAUSE: Record<string, string> = { wolf: '被狼刀', poison: '被毒杀', exile: '被放逐', hunter: '被猎人带走', wolf_king: '被狼王带走' };
 
 /**
  * 生成可复制的纯文本游戏记录：游戏结束后包含全部身份与夜间记录，进行中只包含公开信息。
@@ -32,6 +32,10 @@ export function buildRecordText(view: PlayerView, { includeLog = true }: { inclu
     }
     const records = reveal?.nightRecords ?? [];
     if (records.length) {
+      if (view.board.roles.includes('guard')) {
+        lines.push('', '【守卫守护】');
+        for (const r of records) lines.push(`第 ${r.night} 夜：${guardLine(r, seat)}`);
+      }
       if (view.board.roles.includes('witch')) {
         lines.push('', '【女巫用药】');
         for (const r of records) lines.push(`第 ${r.night} 夜：${witchLine(r, seat)}`);
@@ -58,6 +62,13 @@ export function buildRecordText(view: PlayerView, { includeLog = true }: { inclu
     view.log.forEach((l, i) => lines.push(`${i + 1}. ${l.text}`));
   }
   return lines.join('\n');
+}
+
+function guardLine(r: NightRecord, seat: (id: string | null) => string) {
+  if (!r.guard) return '守卫已出局';
+  if (!r.guard.targetId) return '空守';
+  const both = r.guard.targetId === r.killTargetId && r.witch?.type === 'save';
+  return `守护 ${seat(r.guard.targetId)}${both ? '（同守同救，仍然出局）' : r.guard.targetId === r.killTargetId ? '（成功挡刀）' : ''}`;
 }
 
 function witchLine(r: NightRecord, seat: (id: string | null) => string) {
